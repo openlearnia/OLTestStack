@@ -8,6 +8,7 @@ import { z } from 'zod';
 const closeSchema = z
   .object({
     browserId: z.string().uuid(),
+    testName: z.string().optional(),
   })
   .strict();
 
@@ -27,7 +28,7 @@ export async function closeBrowser(
     });
   }
 
-  const { browserId } = parsed.data;
+  const { browserId, testName } = parsed.data;
   const browser = await ctx.registry.getBrowser(browserId);
   if (!browser) {
     return createError(
@@ -39,7 +40,7 @@ export async function closeBrowser(
 
   try {
     await ctx.cdp.closeBrowser({ id: browserId, connected: !browser.crashed });
-    await flushRecordingToDatabase(ctx, browserId);
+    await flushRecordingToDatabase(ctx, browserId, testName);
     await ctx.registry.deleteBrowser(browserId);
     ctx.recording.releaseBrowser(browserId);
     return success({ closed: true as const });

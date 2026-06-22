@@ -18,7 +18,7 @@ Register all V1 MCP tools on server startup with JSON Schema input definitions a
 | FR-12-005 | Each MCP tool SHALL have a descriptive `description` field suitable for LLM tool selection. |
 | FR-12-006 | Tool descriptions SHALL include usage examples and parameter guidance. |
 | FR-12-007 | The server SHALL register the following tool groups: Browser (2), Page (4), Element (2), Action (4), Inspection (4), Monitoring (2), Wait (1), Assert (4), Test (1). |
-| FR-12-008 | Tool names SHALL use dot notation: `{domain}.{action}` (e.g., `browser.launch`, `page.click`, `assert.text`). |
+| FR-12-008 | Tool names SHALL use dot notation: `{domain}.{action}` (e.g., `browser.launch`, `page.click`, `assert.text`). **Implementation note:** Cursor MCP rejects dots in registered tool names; the server registers underscore aliases (e.g., `browser_launch`, `page_click`) while dispatch also accepts legacy dotted names for backward compatibility. |
 | FR-12-009 | All tools SHALL return responses using the shared success/error envelope from Module 01. |
 
 ---
@@ -37,7 +37,7 @@ Register all V1 MCP tools on server startup with JSON Schema input definitions a
 
 ```typescript
 interface ToolDefinition {
-  name: string;            // e.g., "browser.launch"
+  name: string;            // e.g., "browser.launch" (conceptual); registered as "browser_launch" for Cursor MCP
   description: string;     // LLM-friendly description with examples
   inputSchema: JSONSchema;   // JSON Schema draft-07
   handler: (input: unknown) => Promise<McpSuccessResponse<unknown> | McpErrorResponse>;

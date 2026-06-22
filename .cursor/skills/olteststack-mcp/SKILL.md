@@ -56,85 +56,98 @@ Always check `ok` before reading `data`.
 
 | ID | From | Required by |
 |----|------|-------------|
-| `browserId` | `browser.launch` | `page.create`, `browser.close` |
-| `pageId` | `page.create` | All `page.*` tools |
-| `elementId` | `page.find`, `page.elements`, `page.snapshot` | `page.click`, `page.type` |
+| `browserId` | `browser_launch` | `page_create`, `browser_close`, `session_export` |
+| `pageId` | `page_create` | All `page_*` tools |
+| `elementId` | `page_find`, `page_elements`, `page_snapshot` | `page_click`, `page_type` |
 
-IDs invalidate on `page.navigate` and `page.reload`. Always re-discover elements after navigation.
+IDs invalidate on `page_navigate` and `page_reload`. Always re-discover elements after navigation.
 
-## Implemented tools (19)
+## Implemented tools (25)
 
 ### Browser (2)
 
 | Tool | Purpose |
 |------|---------|
-| `browser.launch` | Start Chromium; returns `browserId` |
-| `browser.close` | Close browser; flush recordings if `PERSIST_RECORDING=true` |
+| `browser_launch` | Start Chromium; returns `browserId` |
+| `browser_close` | Close browser; flush recordings if `PERSIST_RECORDING=true` |
 
 ### Page (4)
 
 | Tool | Purpose |
 |------|---------|
-| `page.create` | Open tab; returns `pageId` |
-| `page.navigate` | Go to URL; invalidates elements |
-| `page.reload` | Reload page; invalidates elements |
-| `page.close` | Close single tab |
+| `page_create` | Open tab; returns `pageId` |
+| `page_navigate` | Go to URL; invalidates elements |
+| `page_reload` | Reload page; invalidates elements |
+| `page_close` | Close single tab |
 
 ### Elements (2)
 
 | Tool | Purpose |
 |------|---------|
-| `page.elements` | List interactive elements (max 200) |
-| `page.find` | Find element by text/role/aria-label query |
+| `page_elements` | List interactive elements (max 200) |
+| `page_find` | Find element by text/role/aria-label query |
 
 ### Actions (4)
 
 | Tool | Purpose |
 |------|---------|
-| `page.click` | Click by `elementId` |
-| `page.type` | Type into input/textarea |
-| `page.press` | Keyboard key (Enter, Tab, Escape, …) |
-| `page.scroll` | Scroll viewport |
+| `page_click` | Click by `elementId` |
+| `page_type` | Type into input/textarea |
+| `page_press` | Keyboard key (Enter, Tab, Escape, …) |
+| `page_scroll` | Scroll viewport |
 
 ### Inspection (4)
 
 | Tool | Purpose |
 |------|---------|
-| `page.screenshot` | PNG capture to `SCREENSHOT_DIR` |
-| `page.snapshot` | URL, title, DOM summary, elements |
-| `page.text` | Visible text extraction |
-| `page.html` | Full outer HTML |
+| `page_screenshot` | PNG capture to `SCREENSHOT_DIR` |
+| `page_snapshot` | URL, title, DOM summary, elements |
+| `page_text` | Visible text extraction |
+| `page_html` | Full outer HTML |
 
 ### Monitoring (2)
 
 | Tool | Purpose |
 |------|---------|
-| `page.network` | Captured requests (optional URL filter) |
-| `page.console` | Console messages (optional level filter) |
+| `page_network` | Captured requests (optional URL filter) |
+| `page_console` | Console messages (optional level filter) |
 
 ### Waiting (1)
 
 | Tool | Purpose |
 |------|---------|
-| `page.wait` | Wait for element, URL, networkIdle, or timeout |
+| `page_wait` | Wait for element, URL, networkIdle, or timeout |
 
-## Planned (not registered)
+### Assertions (4)
 
-| Tool | Phase |
-|------|-------|
-| `assert.exists`, `assert.text`, `assert.url`, `assert.network` | 9 |
-| `test.run` | 11 |
+| Tool | Purpose |
+|------|---------|
+| `assert_exists` | Element visible by query or elementId |
+| `assert_text` | Page text contains/equals expected |
+| `assert_url` | URL contains/equals expected |
+| `assert_network` | Request matching URL and status |
 
-Until Phase 9, verify with `page.text`, `page.snapshot`, `page.wait`, or `page.find`.
+### Session & test (2)
+
+| Tool | Purpose |
+|------|---------|
+| `session_export` | Export recording buffer as `.olteststack.json` script |
+| `test_run` | Execute steps/script and return `TestReport` |
 
 ## Canonical workflow
 
 ```text
-browser.launch → page.create → page.navigate → page.find/page.elements
-  → page.type/page.click → page.wait → page.screenshot → browser.close
+browser_launch → page_create → page_navigate → page_find/page_elements
+  → page_type/page_click → page_wait → assert_* → page_screenshot → browser_close
 ```
 
-Always call `browser.close` in cleanup, even after failures.
+Record → export → replay:
+
+```text
+(agent-driven session) → session_export → save script → test_run(scriptFile) → browser_close
+```
+
+Always call `browser_close` in cleanup, even after failures.
 
 ## Error codes
 
@@ -142,9 +155,9 @@ Always call `browser.close` in cleanup, even after failures.
 |------|----------|
 | `INVALID_INPUT` | Fix field per `error.details` |
 | `SESSION_NOT_FOUND` | Re-launch browser |
-| `ELEMENT_NOT_FOUND` | Re-discover with `page.elements` |
+| `ELEMENT_NOT_FOUND` | Re-discover with `page_elements` |
 | `TIMEOUT` | Increase `timeoutMs` |
-| `BROWSER_CRASHED` | New `browser.launch` |
+| `BROWSER_CRASHED` | New `browser_launch` |
 | `NAVIGATION_FAILED` | Check URL and network |
 
 ## Project skills
@@ -153,6 +166,7 @@ Always call `browser.close` in cleanup, even after failures.
 |-------|---------|
 | `browser-test-login` | Login/sign-in flows |
 | `browser-test-crud` | Create/read/update/delete flows |
+| `session-record-export` | Record → export → replay workflow |
 | `olteststack-mcp` | General MCP reference (this file) |
 
 ## Documentation

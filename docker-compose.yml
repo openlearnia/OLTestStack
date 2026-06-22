@@ -2,8 +2,8 @@
 #
 # Ports (non-default by design):
 #   PostgreSQL  host 5433 → container 5432
-#   App health  host 8081 → container 8081
-#   MCP HTTP    host 8082 → container 8082  (Streamable HTTP when app profile runs)
+#   App health  host 8091 → container 8081  (APP_HOST_PORT / HEALTH_PORT)
+#   MCP HTTP    host 8092 → container 8082  (MCP_HOST_PORT / MCP_HTTP_PORT)
 #
 # Quick start (Postgres only):
 #   docker compose up -d postgres
@@ -13,8 +13,9 @@
 #
 # Full stack (MCP over HTTP in Docker):
 #   docker compose --profile app up -d
-#   curl http://localhost:8081/health
-#   curl -s -X POST http://localhost:8082/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
+#   curl http://localhost:8091/health
+#   open http://localhost:8091/dashboard
+#   curl -s -X POST http://localhost:8092/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
 
 services:
   postgres:
@@ -53,14 +54,16 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-oltest}:${POSTGRES_PASSWORD:-oltest}@postgres:5432/${POSTGRES_DB:-olteststack}
       PERSIST_RECORDING: ${PERSIST_RECORDING:-true}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
       HEALTH_PORT: ${HEALTH_PORT:-8081}
+      DASHBOARD_ENABLED: ${DASHBOARD_ENABLED:-true}
       MCP_TRANSPORT: ${MCP_TRANSPORT:-http}
       MCP_HTTP_HOST: ${MCP_HTTP_HOST:-0.0.0.0}
       MCP_HTTP_PORT: ${MCP_HTTP_PORT:-8082}
       BROWSER_HEADLESS: ${BROWSER_HEADLESS:-true}
     ports:
-      - "${APP_HOST_PORT:-8081}:8081"
-      - "${MCP_HOST_PORT:-8082}:8082"
+      - "${APP_HOST_PORT:-8091}:${HEALTH_PORT:-8081}"
+      - "${MCP_HOST_PORT:-8092}:${MCP_HTTP_PORT:-8082}"
     volumes:
       - ./screenshots:/app/screenshots
     networks:

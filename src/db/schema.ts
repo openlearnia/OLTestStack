@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -30,8 +31,17 @@ export const testReports = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** When false, session is ephemeral and subject to SESSION_TTL_HOURS expiry. */
+    saved: boolean('saved').notNull().default(false),
+    /** Null when saved=true (no expiry). Set on insert for ephemeral sessions. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    savedAt: timestamp('saved_at', { withTimezone: true }),
   },
-  (table) => [index('test_reports_browser_id_idx').on(table.browserId)],
+  (table) => [
+    index('test_reports_browser_id_idx').on(table.browserId),
+    index('test_reports_expires_at_idx').on(table.expiresAt),
+    index('test_reports_saved_idx').on(table.saved),
+  ],
 );
 
 export const recordedEvents = pgTable(

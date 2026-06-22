@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "name": "Sample app login smoke",
+  "goal": "Fill login form and assert controls exist",
+  "url": "file://fixtures/sample-app/index.html",
+  "recordedAt": "2026-06-22T00:00:00.000Z",
+  "steps": [
+    { "action": "assert.exists", "query": "Email" },
+    { "action": "type", "query": "Email", "value": "user@example.com" },
+    { "action": "type", "query": "Password", "value": "secret" },
+    { "action": "assert.exists", "query": "Submit" }
+  ]
+}

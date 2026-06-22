@@ -28,15 +28,15 @@ Complete reference for OLTestStack MCP tools. All tools return a JSON envelope a
 
 | Status | Count | Tools |
 |--------|-------|-------|
-| **Implemented** | 19 | Browser (2), Page (4), Elements (2), Actions (4), Inspection (4), Monitoring (2), Wait (1) |
-| **Planned** | 5 | Assertions (4), Test (1) |
-| **Total (V1)** | 22 | See [planned tools](#planned-tools) below |
+| **Implemented** | 25 | All V1 tools — browser, page, elements, actions, inspection, monitoring, wait, assertions, session_export, test_run |
+| **Planned** | 0 | — |
+| **Total (V1)** | 25 | Complete |
 
 ---
 
 ## Implemented tools
 
-### `browser.launch`
+### `browser_launch`
 
 Launch a new Chromium browser instance.
 
@@ -79,11 +79,11 @@ Launch a new Chromium browser instance.
 | `INVALID_INPUT` | Unknown fields, invalid viewport values |
 | `INTERNAL_ERROR` | Chromium failed to launch (binary missing, permissions) |
 
-**Agent workflow:** Always the first step. Store `browserId` for all subsequent commands. Call `browser.close` in cleanup.
+**Agent workflow:** Always the first step. Store `browserId` for all subsequent commands. Call `browser_close` in cleanup.
 
 ---
 
-### `browser.close`
+### `browser_close`
 
 Close a browser and all its pages. Flushes recordings to PostgreSQL when `PERSIST_RECORDING=true`.
 
@@ -124,7 +124,7 @@ Close a browser and all its pages. Flushes recordings to PostgreSQL when `PERSIS
 
 ---
 
-### `page.create`
+### `page_create`
 
 Open a new tab in an existing browser.
 
@@ -167,7 +167,7 @@ Open a new tab in an existing browser.
 
 ---
 
-### `page.navigate`
+### `page_navigate`
 
 Navigate a page to a URL. Waits for load by default. **Invalidates all previously discovered elements.**
 
@@ -214,11 +214,11 @@ Navigate a page to a URL. Waits for load by default. **Invalidates all previousl
 | `NAVIGATION_FAILED` | Page failed to load (DNS, 4xx/5xx, etc.) |
 | `TIMEOUT` | Navigation exceeded `timeoutMs` |
 
-**Agent workflow:** After every successful navigate, call `page.elements` or `page.find` before interacting. Navigation events are recorded when `recordingEnabled` is true.
+**Agent workflow:** After every successful navigate, call `page_elements` or `page_find` before interacting. Navigation events are recorded when `recordingEnabled` is true.
 
 ---
 
-### `page.reload`
+### `page_reload`
 
 Reload the current page. **Invalidates all previously discovered elements.**
 
@@ -263,7 +263,7 @@ Reload the current page. **Invalidates all previously discovered elements.**
 
 ---
 
-### `page.close`
+### `page_close`
 
 Close a single tab. The browser stays open if other pages exist.
 
@@ -302,9 +302,9 @@ Close a single tab. The browser stays open if other pages exist.
 
 ---
 
-### `page.elements`
+### `page_elements`
 
-List visible interactive elements on the page via the accessibility tree. Registers elements in the session for later targeting with `page.click`, `page.type`, and related action tools.
+List visible interactive elements on the page via the accessibility tree. Registers elements in the session for later targeting with `page_click`, `page_type`, and related action tools.
 
 **Input schema**
 
@@ -363,7 +363,7 @@ When more than 200 elements match, `truncated: true` is included and only the fi
 
 ---
 
-### `page.find`
+### `page_find`
 
 Find a single interactive element by text query. Matches visible text, role, or aria-label (case-insensitive substring). Registers the matched element in the session.
 
@@ -412,11 +412,11 @@ When `matchCount > 1`, the first visible match is returned.
 | `ELEMENT_NOT_FOUND` | No visible element matches the query |
 | `INTERNAL_ERROR` | Tree extraction failed |
 
-**Agent workflow:** Use when you know the label (e.g. "Login", "Email", "Submit"). Faster than scanning a full `page.elements` list for simple flows.
+**Agent workflow:** Use when you know the label (e.g. "Login", "Email", "Submit"). Faster than scanning a full `page_elements` list for simple flows.
 
 ---
 
-### `page.click`
+### `page_click`
 
 Click an interactive element by `elementId`. Scrolls into view and waits for the element to be actionable.
 
@@ -458,11 +458,11 @@ Click an interactive element by `elementId`. Scrolls into view and waits for the
 | `TIMEOUT` | Element not actionable within timeout |
 | `INTERNAL_ERROR` | CDP click failure |
 
-**Agent workflow:** Discover with `page.find` or `page.elements` first. Rediscover after navigation — stale `elementId` values fail.
+**Agent workflow:** Discover with `page_find` or `page_elements` first. Rediscover after navigation — stale `elementId` values fail.
 
 ---
 
-### `page.type`
+### `page_type`
 
 Type text into an input or textarea element. Clears existing value unless `append` is true.
 
@@ -508,11 +508,11 @@ Type text into an input or textarea element. Clears existing value unless `appen
 | `ELEMENT_NOT_FOUND` | Unknown or stale `elementId` |
 | `INTERNAL_ERROR` | CDP type failure |
 
-**Agent workflow:** Target `textbox`, `searchbox`, or `textarea` roles. Use `page.find` with field labels like "Email" or "Password".
+**Agent workflow:** Target `textbox`, `searchbox`, or `textarea` roles. Use `page_find` with field labels like "Email" or "Password".
 
 ---
 
-### `page.press`
+### `page_press`
 
 Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos).
 
@@ -556,7 +556,7 @@ Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos).
 
 ---
 
-### `page.scroll`
+### `page_scroll`
 
 Scroll the page in a direction. Default amount is one viewport height/width.
 
@@ -598,11 +598,11 @@ Scroll the page in a direction. Default amount is one viewport height/width.
 | `SESSION_NOT_FOUND` | Page not found |
 | `INTERNAL_ERROR` | CDP scroll failure |
 
-**Agent workflow:** Scroll to reveal off-screen elements, then call `page.elements` or `page.find` again.
+**Agent workflow:** Scroll to reveal off-screen elements, then call `page_elements` or `page_find` again.
 
 ---
 
-### `page.screenshot`
+### `page_screenshot`
 
 Capture a PNG screenshot of the page viewport or full scrollable page. Saves to `SCREENSHOT_DIR`.
 
@@ -648,7 +648,7 @@ Capture a PNG screenshot of the page viewport or full scrollable page. Saves to 
 
 ---
 
-### `page.snapshot`
+### `page_snapshot`
 
 Get a comprehensive page snapshot: URL, title, DOM summary, and interactive elements.
 
@@ -705,7 +705,7 @@ Get a comprehensive page snapshot: URL, title, DOM summary, and interactive elem
 
 ---
 
-### `page.text`
+### `page_text`
 
 Extract visible text content from the page (whitespace-normalized). Truncated at 50,000 characters.
 
@@ -745,11 +745,11 @@ When text exceeds 50,000 characters, `truncated: true` is included.
 | `SESSION_NOT_FOUND` | Page not found |
 | `INTERNAL_ERROR` | Text extraction failed |
 
-**Agent workflow:** Quick content check without parsing HTML. Use `page.find` or assertion tools (when available) for targeted verification.
+**Agent workflow:** Quick content check without parsing HTML. Use `page_find` or `assert_text` for targeted verification.
 
 ---
 
-### `page.html`
+### `page_html`
 
 Extract the full outer HTML of the page document. Truncated at 500,000 characters.
 
@@ -789,13 +789,13 @@ When HTML exceeds 500,000 characters, `truncated: true` is included.
 | `SESSION_NOT_FOUND` | Page not found |
 | `INTERNAL_ERROR` | HTML extraction failed |
 
-**Agent workflow:** Use for structural inspection. Prefer `page.text` or `page.snapshot` for agent-readable summaries.
+**Agent workflow:** Use for structural inspection. Prefer `page_text` or `page_snapshot` for agent-readable summaries.
 
 ---
 
-### `page.network`
+### `page_network`
 
-Return captured network requests for the page. Supports optional URL filter and since timestamp. Monitoring starts automatically on `page.create`.
+Return captured network requests for the page. Supports optional URL filter and since timestamp. Monitoring starts automatically on `page_create`.
 
 **Input schema**
 
@@ -849,9 +849,9 @@ Return captured network requests for the page. Supports optional URL filter and 
 
 ---
 
-### `page.console`
+### `page_console`
 
-Return captured browser console messages (logs, warnings, errors). Monitoring starts automatically on `page.create`.
+Return captured browser console messages (logs, warnings, errors). Monitoring starts automatically on `page_create`.
 
 **Input schema**
 
@@ -903,7 +903,7 @@ Return captured browser console messages (logs, warnings, errors). Monitoring st
 
 ---
 
-### `page.wait`
+### `page_wait`
 
 Wait for a condition: element appearance, URL match, network idle, or fixed timeout.
 
@@ -913,7 +913,7 @@ Wait for a condition: element appearance, URL match, network idle, or fixed time
 |-------|------|----------|---------|-------------|
 | `pageId` | string (UUID) | yes | — | Target page |
 | `condition` | enum | yes | — | `"element"` \| `"url"` \| `"networkIdle"` \| `"timeout"` |
-| `query` | string | when `element` | — | Element search query (same as `page.find`) |
+| `query` | string | when `element` | — | Element search query (same as `page_find`) |
 | `value` | string | when `url` | — | Expected URL or substring |
 | `match` | enum | no | `"contains"` | `"equals"` \| `"contains"` (URL condition only) |
 | `durationMs` | integer (≥100) | when `timeout` | — | Fixed wait duration |
@@ -969,41 +969,350 @@ For `condition: "element"`, `elementId` is included in the response. For `condit
 
 ---
 
-## Planned tools
+### `assert_exists`
 
-The following **5 tools** are specified in `requirements/` and scheduled per `docs/plans/v1-implementation-plan.md`. They are **not registered** in the server today.
+Assert that an element matching a query exists and is visible, or that a known `elementId` is visible. Returns `elementId` on pass; `ASSERTION_FAILED` with expected/actual on failure.
 
-| Tool | Phase | Description |
-|------|-------|-------------|
-| `assert.exists` | 9 | Assert an element exists |
-| `assert.text` | 9 | Assert page contains text |
-| `assert.url` | 9 | Assert current URL matches |
-| `assert.network` | 9 | Assert a network request occurred |
-| `test.run` | 11 | Execute a step sequence and return a structured test report |
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `query` | string (min 1 char) | one of query/elementId | Text query (same semantics as `page_find`) |
+| `elementId` | string (UUID) | one of query/elementId | Previously discovered element |
+
+**Example input**
+
+```json
+{
+  "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "query": "Submit"
+}
+```
+
+**Example output (pass)**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "passed": true,
+    "assertion": "exists",
+    "message": "Element matching 'Submit' exists and is visible",
+    "elementId": "d4e5f6a7-b8c9-0123-def0-234567890123"
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `INVALID_INPUT` | Missing both `query` and `elementId` |
+| `SESSION_NOT_FOUND` | Page not found |
+| `ASSERTION_FAILED` | No visible match (includes `expected` and `actual` in details) |
+
+---
+
+### `assert_text`
+
+Assert that visible page text contains or equals a string (same source as `page_text`).
+
+**Input schema**
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `pageId` | string (UUID) | yes | — |
+| `contains` | string (min 1 char) | yes | — |
+| `match` | enum | no | `"contains"` |
+
+`match` values: `"contains"` \| `"equals"`
+
+**Example input**
+
+```json
+{
+  "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "contains": "Welcome"
+}
+```
+
+**Example output (pass)**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "passed": true,
+    "assertion": "text",
+    "message": "Page text contains 'Welcome'"
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `INVALID_INPUT` | Empty `contains` |
+| `SESSION_NOT_FOUND` | Page not found |
+| `ASSERTION_FAILED` | Text mismatch (includes text snippet in `actual`) |
+
+---
+
+### `assert_url`
+
+Assert that the current page URL contains or equals an expected value.
+
+**Input schema**
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `pageId` | string (UUID) | yes | — |
+| `url` | string (min 1 char) | yes | — |
+| `match` | enum | no | `"contains"` |
+
+**Example input**
+
+```json
+{
+  "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "url": "/dashboard"
+}
+```
+
+**Example output (pass)**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "passed": true,
+    "assertion": "url",
+    "message": "URL contains '/dashboard'"
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `INVALID_INPUT` | Empty `url` |
+| `SESSION_NOT_FOUND` | Page not found |
+| `ASSERTION_FAILED` | URL mismatch (expected and actual URL in details) |
+
+---
+
+### `assert_network`
+
+Assert that a network request matching a URL substring occurred with the expected status. Searches the page network buffer.
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `url` | string (min 1 char) | yes | URL substring to match |
+| `status` | integer or string | yes | Exact code (200) or range (`2xx`) |
+
+**Example input**
+
+```json
+{
+  "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "url": "/api/users",
+  "status": 200
+}
+```
+
+**Example output (pass)**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "passed": true,
+    "assertion": "network",
+    "message": "Network request to 'https://example.com/api/users' returned status 200",
+    "matchedRequest": {
+      "url": "https://example.com/api/users",
+      "status": 200,
+      "method": "GET"
+    }
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `INVALID_INPUT` | Invalid status format |
+| `SESSION_NOT_FOUND` | Page not found |
+| `ASSERTION_FAILED` | No matching request in buffer |
+
+---
+
+### `session_export`
+
+Export the current browser session recording as a replayable `.olteststack.json` script. Call **before** `browser_close` while the session is still open.
+
+**Input schema**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `browserId` | string (UUID) | yes | — | Active browser session |
+| `name` | string | no | `session-<prefix>` | Script name |
+| `goal` | string | no | — | Natural-language goal stored in script metadata |
+
+**Example input**
+
+```json
+{
+  "browserId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Login flow",
+  "goal": "Verify login redirects to dashboard"
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "script": {
+      "version": "1.0",
+      "name": "Login flow",
+      "goal": "Verify login redirects to dashboard",
+      "url": "https://example.com/login",
+      "recordedAt": "2026-06-21T10:00:00.000Z",
+      "steps": [
+        { "action": "type", "query": "Email", "value": "user@example.com" },
+        { "action": "click", "query": "Sign In" },
+        { "action": "assert.url", "url": "/dashboard", "match": "contains" }
+      ]
+    },
+    "eventCount": 12,
+    "stepCount": 3,
+    "skippedCount": 0
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `SESSION_NOT_FOUND` | Browser not found or already closed |
+| `INVALID_INPUT` | Recording disabled for session |
+
+**Note:** Save `data.script` to a `.olteststack.json` file (e.g. under `scripts/`) for replay via `test_run`.
+
+---
+
+### `test_run`
+
+Execute a complete browser test with explicit steps, an inline script, or a script file — then return a structured `TestReport`. Launches browser, runs steps, generates report, and closes browser. Goal-only (no steps/script/scriptFile) returns agent-driven guidance.
+
+**Input schema**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `goal` | string (min 1 char) | yes | — | Test objective (used as report name) |
+| `name` | string | no | `goal` | Override report test name |
+| `url` | string (URI) | no | — | Initial navigation URL (overrides script URL) |
+| `steps` | array | no | — | Explicit step sequence |
+| `script` | object | no | — | Inline `.olteststack.json` replay script |
+| `scriptFile` | string | no | — | Path to script file on MCP server host |
+| `headless` | boolean | no | `true` | Browser headless mode |
+| `stopOnFailure` | boolean | no | `true` | Halt on first step failure |
+| `timeoutMs` | integer (≥5000) | no | `60000` | Overall test timeout |
+
+**Step actions:** `navigate`, `click`, `type`, `press`, `scroll`, `wait`, `screenshot`, `assert.exists`, `assert.text`, `assert.url`, `assert.network`
+
+**Example input (explicit steps)**
+
+```json
+{
+  "goal": "Verify login redirects to dashboard",
+  "url": "https://app.example.com/login",
+  "steps": [
+    { "action": "type", "query": "Email", "value": "user@example.com" },
+    { "action": "type", "query": "Password", "value": "secret" },
+    { "action": "click", "query": "Sign In" },
+    { "action": "assert.url", "url": "/dashboard" },
+    { "action": "assert.text", "contains": "Welcome" }
+  ]
+}
+```
+
+**Example input (script file replay)**
+
+```json
+{
+  "goal": "Replay saved login flow",
+  "scriptFile": "scripts/example-login.olteststack.json"
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "report": {
+      "testName": "Verify login redirects to dashboard",
+      "status": "passed",
+      "startedAt": "2026-06-21T10:00:00.000Z",
+      "completedAt": "2026-06-21T10:00:15.000Z",
+      "executionTimeMs": 15000,
+      "actionsPerformed": [],
+      "assertionsPassed": [],
+      "assertionsFailed": [],
+      "screenshots": [],
+      "networkErrors": [],
+      "consoleErrors": []
+    }
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `INVALID_INPUT` | Malformed input or steps |
+| `INTERNAL_ERROR` | Browser launch failed |
+| `TIMEOUT` | Test exceeded `timeoutMs` (report status `"error"`) |
+
+**Note:** Step and assertion failures are captured in the report (`status: "failed"`), not as MCP errors. Screenshots are captured after each assertion step.
 
 ---
 
 ## Example: login test scenario
 
-This flow uses **currently available tools** end-to-end.
+This flow exercises core V1 tools — either step-by-step or via `test_run`.
 
 Target: `fixtures/sample-app/index.html` (local login form with Email, Password, Submit).
 
 ### Full agent sequence
 
 ```text
-1. browser.launch        → browserId
-2. page.create           → pageId (starts network/console monitoring)
-3. page.navigate         → file:///path/to/OLTestStack/fixtures/sample-app/index.html
-4. page.find "Email"     → elementId for email field
-5. page.type             → fill email
-6. page.find "Password"  → elementId for password field
-7. page.type             → fill password
-8. page.find "Submit"    → elementId for submit button
-9. page.click            → click Submit
-10. page.wait            → wait for navigation or network idle
-11. page.screenshot      → capture evidence
-12. browser.close        → cleanup
+1. browser_launch        → browserId
+2. page_create           → pageId (starts network/console monitoring)
+3. page_navigate         → file:///path/to/OLTestStack/fixtures/sample-app/index.html
+4. page_find "Email"     → elementId for email field
+5. page_type             → fill email
+6. page_find "Password"  → elementId for password field
+7. page_type             → fill password
+8. page_find "Submit"    → elementId for submit button
+9. page_click            → click Submit
+10. page_wait            → wait for navigation or network idle
+11. page_screenshot      → capture evidence
+12. browser_close        → cleanup
 ```
 
 **Example agent sequence:**
@@ -1039,7 +1348,7 @@ Target: `fixtures/sample-app/index.html` (local login form with Email, Password,
 { "browserId": "<from step 1>" }
 ```
 
-Assertion tools (`assert.url`, etc.) land in Phase 9 for structured pass/fail checks.
+Assertion tools (`assert_exists`, `assert_url`, etc.) provide structured pass/fail checks. Use `test_run` for orchestrated multi-step flows with a generated report.
 
 ---
 
@@ -1049,10 +1358,10 @@ Assertion tools (`assert.url`, etc.) land in Phase 9 for structured pass/fail ch
 |------|---------|------------------|
 | `INVALID_INPUT` | Schema validation failed | Fix field names, types, or required fields |
 | `SESSION_NOT_FOUND` | Unknown `browserId` or `pageId` | Re-launch browser and create page |
-| `ELEMENT_NOT_FOUND` | Query matched nothing | Call `page.elements`, try different query |
+| `ELEMENT_NOT_FOUND` | Query matched nothing | Call `page_elements`, try different query |
 | `NAVIGATION_FAILED` | Page failed to load | Check URL, network, server status |
 | `TIMEOUT` | Operation exceeded timeout | Increase `timeoutMs` or change `waitUntil` |
-| `BROWSER_CRASHED` | Chromium disconnected | `browser.launch` again |
+| `BROWSER_CRASHED` | Chromium disconnected | `browser_launch` again |
 | `ASSERTION_FAILED` | Assertion did not pass (Phase 9+) | Inspect page state, fix test or app |
 | `INTERNAL_ERROR` | Unexpected server error | Check stderr logs, retry |
 

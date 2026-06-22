@@ -7,8 +7,10 @@ Agent-focused documentation for the AI Browser Testing Framework MCP server.
 | Guide | Description |
 |-------|-------------|
 | [MCP Server Setup](./mcp-server-setup.md) | Install, configure, and run the MCP server in Cursor and other clients |
+| [Session Dashboard](./dashboard.md) | Browse persisted test reports and event timelines in the browser |
 | [MCP Tools Reference](./mcp-tools-reference.md) | Input/output schemas, errors, and examples for every tool |
 | [Agent Workflows](./agent-workflows.md) | Recommended patterns for AI agents using browser testing tools |
+| [Session Script Playback](../plans/session-script-playback.md) | Export sessions as `.olteststack.json` scripts and replay them |
 | [Skills](./skills.md) | Cursor Agent Skills for browser testing workflows |
 
 ## Project Cursor setup

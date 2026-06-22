@@ -21,8 +21,13 @@ export class ToolRegistry {
     this.tools.set(tool.name, tool);
   }
 
+  /** Normalize legacy dotted names (browser.launch) to underscore (browser_launch). */
+  private resolveName(name: string): string {
+    return name.includes('.') ? name.replace(/\./g, '_') : name;
+  }
+
   get(name: string): ToolDefinition | undefined {
-    return this.tools.get(name);
+    return this.tools.get(this.resolveName(name));
   }
 
   list(): ToolDefinition[] {
@@ -33,7 +38,7 @@ export class ToolRegistry {
     name: string,
     input: unknown,
   ): Promise<McpSuccessResponse<unknown> | McpErrorResponse> {
-    const tool = this.tools.get(name);
+    const tool = this.tools.get(this.resolveName(name));
     if (!tool) {
       return {
         ok: false,

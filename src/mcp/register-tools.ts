@@ -17,9 +17,20 @@ import { closePage } from '../domain/page/close-page.js';
 import { createPage } from '../domain/page/create-page.js';
 import { navigatePage } from '../domain/page/navigate-page.js';
 import { reloadPage } from '../domain/page/reload-page.js';
+import { assertExists } from '../domain/assertions/exists.js';
+import { assertNetwork } from '../domain/assertions/network.js';
+import { assertText } from '../domain/assertions/text.js';
+import { assertUrl } from '../domain/assertions/url.js';
+import { runTest } from '../domain/test/run-test.js';
+import { exportSession } from '../domain/recording/session-export.js';
+import { saveSession } from '../domain/recording/save-session.js';
 import { waitForCondition } from '../domain/waiting/wait.js';
 import { ToolRegistry } from './registry.js';
 import {
+  assertExistsSchema,
+  assertNetworkSchema,
+  assertTextSchema,
+  assertUrlSchema,
   browserCloseSchema,
   browserLaunchSchema,
   pageClickSchema,
@@ -39,21 +50,24 @@ import {
   pageTextSchema,
   pageTypeSchema,
   pageWaitSchema,
+  sessionExportSchema,
+  saveSessionSchema,
+  testRunSchema,
 } from './schemas/tools.js';
 
 export function registerTools(ctx: AppContext): ToolRegistry {
   const registry = new ToolRegistry();
 
   registry.register({
-    name: 'browser.launch',
+    name: 'browser_launch',
     description:
-      'Launch a new Chromium browser instance. Returns a browserId to use with page.create and other commands. Example: {} for default headless session, or { "headless": false } for a visible window.',
+      'Launch a new Chromium browser instance. Returns a browserId to use with page_create and other commands. Example: {} for default headless session, or { "headless": false } for a visible window.',
     inputSchema: browserLaunchSchema as unknown as Record<string, unknown>,
     handler: (input) => launchBrowser(ctx, input),
   });
 
   registry.register({
-    name: 'browser.close',
+    name: 'browser_close',
     description:
       'Close a browser and all its pages. Always call this when finished to avoid orphan processes. Example: { "browserId": "..." }.',
     inputSchema: browserCloseSchema as unknown as Record<string, unknown>,
@@ -61,7 +75,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.create',
+    name: 'page_create',
     description:
       'Create a new page (tab) in an existing browser. Returns a pageId for navigation and interaction. Example: { "browserId": "..." }.',
     inputSchema: pageCreateSchema as unknown as Record<string, unknown>,
@@ -69,23 +83,23 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.navigate',
+    name: 'page_navigate',
     description:
-      'Navigate a page to a URL. Waits for load by default. Invalidates previously discovered elements — call page.elements after navigation. Example: { "pageId": "...", "url": "https://example.com" }.',
+      'Navigate a page to a URL. Waits for load by default. Invalidates previously discovered elements — call page_elements after navigation. Example: { "pageId": "...", "url": "https://example.com" }.',
     inputSchema: pageNavigateSchema as unknown as Record<string, unknown>,
     handler: (input) => navigatePage(ctx, input),
   });
 
   registry.register({
-    name: 'page.reload',
+    name: 'page_reload',
     description:
-      'Reload the current page. Invalidates all previously discovered elements — call page.elements after reload. Example: { "pageId": "..." }.',
+      'Reload the current page. Invalidates all previously discovered elements — call page_elements after reload. Example: { "pageId": "..." }.',
     inputSchema: pageReloadSchema as unknown as Record<string, unknown>,
     handler: (input) => reloadPage(ctx, input),
   });
 
   registry.register({
-    name: 'page.close',
+    name: 'page_close',
     description:
       'Close a page/tab. The browser remains open if other pages exist. Example: { "pageId": "..." }.',
     inputSchema: pageCloseSchema as unknown as Record<string, unknown>,
@@ -93,7 +107,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.elements',
+    name: 'page_elements',
     description:
       'List visible interactive elements on the page. Use this to understand what can be clicked or typed into. Example: { "pageId": "..." }.',
     inputSchema: pageElementsSchema as unknown as Record<string, unknown>,
@@ -101,7 +115,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.find',
+    name: 'page_find',
     description:
       'Find a single interactive element by text query (matches visible text, role, or aria-label). Example: { "pageId": "...", "query": "Submit" }.',
     inputSchema: pageFindSchema as unknown as Record<string, unknown>,
@@ -109,7 +123,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.click',
+    name: 'page_click',
     description:
       'Click an interactive element by elementId. Scrolls into view and waits for the element to be actionable. Example: { "pageId": "...", "elementId": "..." }.',
     inputSchema: pageClickSchema as unknown as Record<string, unknown>,
@@ -117,7 +131,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.type',
+    name: 'page_type',
     description:
       'Type text into an input or textarea element. Clears existing value unless append is true. Example: { "pageId": "...", "elementId": "...", "value": "hello" }.',
     inputSchema: pageTypeSchema as unknown as Record<string, unknown>,
@@ -125,7 +139,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.press',
+    name: 'page_press',
     description:
       'Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos). Example: { "pageId": "...", "key": "Enter" }.',
     inputSchema: pagePressSchema as unknown as Record<string, unknown>,
@@ -133,7 +147,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.scroll',
+    name: 'page_scroll',
     description:
       'Scroll the page in a direction (up, down, left, right). Default amount is one viewport height/width. Example: { "pageId": "...", "direction": "down" }.',
     inputSchema: pageScrollSchema as unknown as Record<string, unknown>,
@@ -141,7 +155,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.screenshot',
+    name: 'page_screenshot',
     description:
       'Capture a PNG screenshot of the page viewport or full scrollable page. Saves to SCREENSHOT_DIR. Example: { "pageId": "..." }.',
     inputSchema: pageScreenshotSchema as unknown as Record<string, unknown>,
@@ -149,7 +163,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.text',
+    name: 'page_text',
     description:
       'Extract visible text content from the page (whitespace-normalized). Example: { "pageId": "..." }.',
     inputSchema: pageTextSchema as unknown as Record<string, unknown>,
@@ -157,7 +171,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.html',
+    name: 'page_html',
     description:
       'Extract the full outer HTML of the page document. Example: { "pageId": "..." }.',
     inputSchema: pageHtmlSchema as unknown as Record<string, unknown>,
@@ -165,7 +179,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.snapshot',
+    name: 'page_snapshot',
     description:
       'Get a comprehensive page snapshot: URL, title, DOM summary, and interactive elements. Example: { "pageId": "..." }.',
     inputSchema: pageSnapshotSchema as unknown as Record<string, unknown>,
@@ -173,7 +187,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.network',
+    name: 'page_network',
     description:
       'Return captured network requests for the page. Supports optional URL filter and since timestamp. Example: { "pageId": "...", "filter": "/api/" }.',
     inputSchema: pageNetworkSchema as unknown as Record<string, unknown>,
@@ -181,7 +195,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.console',
+    name: 'page_console',
     description:
       'Return captured browser console messages (logs, warnings, errors). Example: { "pageId": "...", "level": "error" }.',
     inputSchema: pageConsoleSchema as unknown as Record<string, unknown>,
@@ -189,11 +203,67 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
-    name: 'page.wait',
+    name: 'page_wait',
     description:
       'Wait for a condition: element appearance, URL match, network idle, or fixed timeout. Example: { "pageId": "...", "condition": "element", "query": "Submit" }.',
     inputSchema: pageWaitSchema as unknown as Record<string, unknown>,
     handler: (input) => waitForCondition(ctx, input),
+  });
+
+  registry.register({
+    name: 'assert_exists',
+    description:
+      'Assert that an element matching a query exists and is visible, or that a known elementId is visible. Returns elementId on pass. Example: { "pageId": "...", "query": "Submit" }.',
+    inputSchema: assertExistsSchema as unknown as Record<string, unknown>,
+    handler: (input) => assertExists(ctx, input),
+  });
+
+  registry.register({
+    name: 'assert_text',
+    description:
+      'Assert that visible page text contains or equals a string. Example: { "pageId": "...", "contains": "Welcome" }.',
+    inputSchema: assertTextSchema as unknown as Record<string, unknown>,
+    handler: (input) => assertText(ctx, input),
+  });
+
+  registry.register({
+    name: 'assert_url',
+    description:
+      'Assert that the current page URL contains or equals an expected value. Example: { "pageId": "...", "url": "/dashboard" }.',
+    inputSchema: assertUrlSchema as unknown as Record<string, unknown>,
+    handler: (input) => assertUrl(ctx, input),
+  });
+
+  registry.register({
+    name: 'assert_network',
+    description:
+      'Assert that a network request matching a URL substring occurred with the expected status (200 or 2xx). Example: { "pageId": "...", "url": "/api/users", "status": 200 }.',
+    inputSchema: assertNetworkSchema as unknown as Record<string, unknown>,
+    handler: (input) => assertNetwork(ctx, input),
+  });
+
+  registry.register({
+    name: 'session_export',
+    description:
+      'Export the current browser session recording as a replayable .olteststack.json script. Call before browser_close while the session is still open. Example: { "browserId": "...", "name": "Login flow", "goal": "Verify login works" }.',
+    inputSchema: sessionExportSchema as unknown as Record<string, unknown>,
+    handler: (input) => exportSession(ctx, input),
+  });
+
+  registry.register({
+    name: 'save_session',
+    description:
+      'Promote an ephemeral persisted session to saved (no TTL). Unsaved sessions auto-delete after SESSION_TTL_HOURS unless saved. Example: { "reportId": "550e8400-e29b-41d4-a716-446655440000" } or { "sessionId": "...", "name": "Login regression" }.',
+    inputSchema: saveSessionSchema as unknown as Record<string, unknown>,
+    handler: (input) => saveSession(ctx, input),
+  });
+
+  registry.register({
+    name: 'test_run',
+    description:
+      'Execute a complete browser test with explicit steps and return a structured TestReport. Provide goal plus steps, script, or scriptFile; goal-only returns agent-driven guidance. Example: { "goal": "Login flow", "url": "https://app.example.com/login", "steps": [...] } or { "goal": "Replay login", "scriptFile": "scripts/example-login.olteststack.json" }.',
+    inputSchema: testRunSchema as unknown as Record<string, unknown>,
+    handler: (input) => runTest(ctx, input),
   });
 
   return registry;

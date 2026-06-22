@@ -21,9 +21,9 @@ Every tool call requires explicit IDs from prior responses:
 
 | ID | Source |
 |----|--------|
-| `browserId` | `browser.launch` |
-| `pageId` | `page.create` |
-| `elementId` | `page.find` or `page.elements` |
+| `browserId` | `browser_launch` |
+| `pageId` | `page_create` |
+| `elementId` | `page_find` or `page_elements` |
 
 Track IDs in the current session only. Re-launch after `SESSION_NOT_FOUND` or MCP restart.
 
@@ -64,7 +64,7 @@ Navigation **invalidates** all prior `elementId` values.
 
 ### 4. Discover fields
 
-Use `page.find` for each control:
+Use `page_find` for each control:
 
 ```json
 { "pageId": "<pageId>", "query": "Email" }
@@ -72,7 +72,7 @@ Use `page.find` for each control:
 { "pageId": "<pageId>", "query": "Submit" }
 ```
 
-If `ELEMENT_NOT_FOUND`, call `page.elements` and pick controls by role (`textbox`, `button`).
+If `ELEMENT_NOT_FOUND`, call `page_elements` and pick controls by role (`textbox`, `button`).
 
 ### 5. Interact
 
@@ -82,11 +82,11 @@ If `ELEMENT_NOT_FOUND`, call `page.elements` and pick controls by role (`textbox
 { "pageId": "<pageId>", "elementId": "<submitId>" }
 ```
 
-Last call is `page.click`.
+Last call is `page_click`.
 
 ### 6. Synchronize
 
-Prefer `page.wait` over arbitrary delays:
+Prefer `page_wait` over arbitrary delays:
 
 ```json
 { "pageId": "<pageId>", "condition": "url", "value": "/dashboard", "match": "contains" }
@@ -98,9 +98,9 @@ Or `{ "condition": "networkIdle" }` for SPA/API-driven redirects.
 
 `assert.*` tools are **not yet implemented**. Verify with:
 
-- `page.wait` (URL condition)
-- `page.text` or `page.snapshot` for welcome content
-- `page.find` for post-login UI elements
+- `page_wait` (URL condition)
+- `page_text` or `page_snapshot` for welcome content
+- `page_find` for post-login UI elements
 
 ### 8. Evidence
 
@@ -113,7 +113,7 @@ Screenshot and console calls respectively.
 
 ### 9. Cleanup (required)
 
-Always call `browser.close` in a finally block:
+Always call `browser_close` in a finally block:
 
 ```json
 { "browserId": "<browserId>" }
@@ -123,10 +123,10 @@ Always call `browser.close` in a finally block:
 
 | Error | Action |
 |-------|--------|
-| `SESSION_NOT_FOUND` | `browser.launch` → `page.create` → resume from navigate |
-| `ELEMENT_NOT_FOUND` | `page.elements` → refine query → `page.find` again |
+| `SESSION_NOT_FOUND` | `browser_launch` → `page_create` → resume from navigate |
+| `ELEMENT_NOT_FOUND` | `page_elements` → refine query → `page_find` again |
 | `TIMEOUT` | Increase `timeoutMs` or use `waitUntil: "domcontentloaded"` |
-| `BROWSER_CRASHED` | New `browser.launch`; discard old IDs |
+| `BROWSER_CRASHED` | New `browser_launch`; discard old IDs |
 | `INVALID_INPUT` | Read `error.details.field` and fix payload |
 
 ## Response envelope

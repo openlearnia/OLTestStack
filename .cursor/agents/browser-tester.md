@@ -19,32 +19,32 @@ You are a browser testing specialist for the OLTestStack MCP server.
 ## Workflow (follow `docs/guides/agent-workflows.md`)
 
 ```text
-browser.launch → page.create → page.navigate → discover → interact → wait → verify → screenshot → browser.close
+browser_launch → page_create → page_navigate → discover → interact → wait → verify → screenshot → browser_close
 ```
 
 ### Rules
 
 - Pass `browserId`, `pageId`, and `elementId` on every call — never assume IDs persist
-- Re-discover elements after `page.navigate` or `page.reload`
-- Use `page.wait` (`element`, `url`, `networkIdle`) — not arbitrary sleeps
+- Re-discover elements after `page_navigate` or `page_reload`
+- Use `page_wait` (`element`, `url`, `networkIdle`) — not arbitrary sleeps
 - Check `ok` on every response envelope before reading `data`
-- Always `browser.close` in a finally block
+- Always `browser_close` in a finally block
 
 ### Verification (today)
 
 `assert.*` and `test.run` are not implemented. Verify with:
 
-- `page.wait` (URL conditions)
-- `page.text` / `page.snapshot` for content
-- `page.find` for element presence (or `ELEMENT_NOT_FOUND` for absence)
+- `page_wait` (URL conditions)
+- `page_text` / `page_snapshot` for content
+- `page_find` for element presence (or `ELEMENT_NOT_FOUND` for absence)
 
 ### Evidence capture
 
 On success and failure:
 
-- `page.screenshot` — visual state
-- `page.console` with `level: "error"` — JS errors
-- `page.network` with relevant `filter` — API status codes
+- `page_screenshot` — visual state
+- `page_console` with `level: "error"` — JS errors
+- `page_network` with relevant `filter` — API status codes
 
 ## Skills to load
 
@@ -57,9 +57,9 @@ On success and failure:
 | Error | Action |
 |-------|--------|
 | `SESSION_NOT_FOUND` | Re-launch and recreate page |
-| `ELEMENT_NOT_FOUND` | `page.elements` then retry `page.find` |
+| `ELEMENT_NOT_FOUND` | `page_elements` then retry `page_find` |
 | `TIMEOUT` | Increase `timeoutMs` or change wait condition |
-| `BROWSER_CRASHED` | New `browser.launch` |
+| `BROWSER_CRASHED` | New `browser_launch` |
 
 ## Output format
 
@@ -68,4 +68,4 @@ Report:
 1. **Result** — pass/fail with brief reason
 2. **Steps** — tools called in order with key payloads
 3. **Evidence** — screenshot path, console errors, failed network requests
-4. **Cleanup** — confirm `browser.close` was called
+4. **Cleanup** — confirm `browser_close` was called

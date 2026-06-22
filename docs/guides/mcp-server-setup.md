@@ -26,8 +26,10 @@ OLTestStack supports two MCP wire transports:
 | Service | Default port | Notes |
 |---------|--------------|-------|
 | PostgreSQL (Docker) | **5433** (host) → 5432 (container) | `POSTGRES_HOST_PORT` |
-| HTTP health | **8081** | `GET /health` when `HEALTH_PORT` is set |
-| MCP Streamable HTTP | **8082** | `POST/GET/DELETE /mcp` when `MCP_TRANSPORT=http` |
+| HTTP health (local `dev:http`) | **8081** | `GET /health` when `HEALTH_PORT` is set |
+| MCP Streamable HTTP (local `dev:http`) | **8082** | `POST/GET/DELETE /mcp` when `MCP_TRANSPORT=http` |
+| HTTP health (Docker host) | **8091** → 8081 (container) | `APP_HOST_PORT` / `HEALTH_PORT` |
+| MCP Streamable HTTP (Docker host) | **8092** → 8082 (container) | `MCP_HOST_PORT` / `MCP_HTTP_PORT` |
 
 ## Installation
 
@@ -98,23 +100,23 @@ Run Postgres + MCP server in containers:
 cp .env.example .env
 docker compose up -d postgres
 docker compose --profile migrate run --rm migrate
-docker compose --profile app up -d
+bun run docker:app
 ```
 
-Verify:
+Verify (Docker host ports **8091** / **8092** — avoids conflict with local `bun run dev:http` on 8081/8082):
 
 ```bash
-curl http://localhost:8081/health
+curl http://localhost:8091/health
 # {"status":"ok","service":"olteststack"}
 
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8092/mcp \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
 # Returns JSON-RPC initialize result with mcp-session-id header
 ```
 
-The Docker `app` service sets `MCP_TRANSPORT=http`, binds `MCP_HTTP_HOST=0.0.0.0`, and exposes ports **8081** (health) and **8082** (MCP). Chromium runs headless with `--no-sandbox` flags required in containers.
+The Docker `app` service sets `MCP_TRANSPORT=http`, binds `MCP_HTTP_HOST=0.0.0.0`, and maps host **8091** → container **8081** (health) and **8092** → **8082** (MCP). Chromium runs headless with `--no-sandbox` flags required in containers.
 
 Stop:
 
@@ -146,6 +148,8 @@ Add the server to `.cursor/mcp.json` in your project (or Cursor Settings → MCP
 
 Replace `cwd` with the absolute path to this repository on your machine.
 
+**Important:** If you configure `olteststack` in **global** Cursor MCP settings (user-level `~/.cursor/mcp.json` or Settings → MCP), you must still set `cwd` to the absolute path of your clone. Cursor does not always infer the repo root from the open workspace, and omitting or using a relative `cwd` is the most common cause of `Script not found "dev"`. Prefer the project-level [`.cursor/mcp.json`](../../.cursor/mcp.json) in this repo when working in OLTestStack.
+
 ### Remote HTTP (Docker or LAN)
 
 Cursor supports MCP servers over HTTP/SSE when configured with a URL (feature availability varies by Cursor version — check Settings → MCP for “URL” or “HTTP” transport options):
@@ -154,7 +158,7 @@ Cursor supports MCP servers over HTTP/SSE when configured with a URL (feature av
 {
   "mcpServers": {
     "olteststack": {
-      "url": "http://localhost:8082/mcp"
+      "url": "http://localhost:8092/mcp"
     }
   }
 }
@@ -191,7 +195,7 @@ bun run db:migrate
 
 ### Headed browser (visible window)
 
-Set `BROWSER_HEADLESS` to `"false"`, or pass `"headless": false` in `browser.launch` at call time.
+Set `BROWSER_HEADLESS` to `"false"`, or pass `"headless": false` in `browser_launch` at call time.
 
 ## Claude Desktop and other MCP clients
 
@@ -290,18 +294,18 @@ Copy `.env.example` to `.env` for local development. Variables can also be set i
 |----------|---------|-------------|
 | `MCP_TRANSPORT` | `stdio` | `stdio` or `http` |
 | `MCP_HTTP_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker) |
-| `MCP_HTTP_PORT` | `8082` | MCP Streamable HTTP port |
-| `MCP_HOST_PORT` | `8082` | Docker host port mapping for MCP HTTP |
-| `BROWSER_HEADLESS` | `true` | Default headless mode for `browser.launch` |
+| `MCP_HTTP_PORT` | `8082` | MCP Streamable HTTP listen port (container / local dev:http) |
+| `MCP_HOST_PORT` | `8092` | Docker host port mapped to `MCP_HTTP_PORT` |
+| `BROWSER_HEADLESS` | `true` | Default headless mode for `browser_launch` |
 | `CHROMIUM_EXECUTABLE_PATH` | auto | Path to Chromium/Chrome binary |
 | `DEFAULT_TIMEOUT_MS` | `30000` | General operation timeout |
 | `DEFAULT_NAVIGATION_TIMEOUT_MS` | `30000` | Navigation and reload timeout |
 | `SCREENSHOT_DIR` | `./screenshots` | Screenshot output directory (Phase 6+) |
 | `DATABASE_URL` | — | PostgreSQL connection string |
-| `PERSIST_RECORDING` | `false` | Flush recordings/reports to Postgres on `browser.close` |
+| `PERSIST_RECORDING` | `false` | Flush recordings/reports to Postgres on `browser_close` |
 | `DB_PORT` | `5433` | Documented Docker host port for Postgres |
-| `HEALTH_PORT` | — | Optional HTTP health server (8081 in Docker) |
-| `APP_HOST_PORT` | `8081` | Docker host port mapping for health |
+| `HEALTH_PORT` | — | App listen port for health (`8081`; container side in Docker) |
+| `APP_HOST_PORT` | `8091` | Docker host port mapped to `HEALTH_PORT` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `oltest` / `oltest` / `olteststack` | Docker Compose credentials (dev only) |
 
 ## Security notes (HTTP mode)
@@ -342,19 +346,19 @@ In Cursor (or your MCP client):
 1. Open MCP settings and ensure `olteststack` shows as connected (green / enabled).
 2. Start a new agent chat and ask: *"List the olteststack MCP tools available."*
 3. You should see **8 tools** today:
-   - `browser.launch`, `browser.close`
-   - `page.create`, `page.navigate`, `page.reload`, `page.close`
-   - `page.elements`, `page.find`
+   - `browser_launch`, `browser_close`
+   - `page_create`, `page_navigate`, `page_reload`, `page_close`
+   - `page_elements`, `page_find`
 
 ### 4. End-to-end tool call
 
 Ask the agent to run a minimal flow:
 
 ```
-browser.launch → page.create → page.navigate (https://example.com) → page.elements → browser.close
+browser_launch → page_create → page_navigate (https://example.com) → page_elements → browser_close
 ```
 
-A successful `page.navigate` returns `{ "ok": true, "data": { "url", "title", ... } }`. All tool responses use the shared JSON envelope (see [MCP Tools Reference](./mcp-tools-reference.md)).
+A successful `page_navigate` returns `{ "ok": true, "data": { "url", "title", ... } }`. All tool responses use the shared JSON envelope (see [MCP Tools Reference](./mcp-tools-reference.md)).
 
 ### 5. Run the test suite (optional)
 
@@ -362,11 +366,69 @@ A successful `page.navigate` returns `{ "ok": true, "data": { "url", "title", ..
 bun run test
 ```
 
+### 6. Testing with MCP client
+
+Use the SDK-based integration test (not `curl`) to exercise the full browser tool flow against `fixtures/sample-app/index.html`. It connects via `StreamableHTTPClientTransport`, auto-spawns a local server on port **8082** when none is running, and prints each tool call with input JSON and response data.
+
+```bash
+bun run test:mcp
+```
+
+Against the Docker app container (MCP on host port **8092**):
+
+```bash
+bun run test:mcp:docker
+```
+
+Override the target URL with `MCP_URL` or the fixture page with `TEST_NAV_URL`.
+
 ## Troubleshooting
+
+### `Script not found "dev"` / MCP connection closed (`-32000`)
+
+**Symptoms:** Cursor MCP logs show `error: Script not found "dev"` and `Connection failed: MCP error -32000: Connection closed`.
+
+**Root cause:** Cursor runs `bun run dev` from the wrong working directory. Bun looks for `package.json` in `cwd`; if `cwd` is missing, set to your home directory, or points at a parent folder, the `dev` script is not found and the MCP process exits immediately.
+
+**Fixes (try in order):**
+
+1. **Set `cwd` to the absolute path of this repo** (where `package.json` lives). Relative paths and workspace-relative `cwd` values often fail in global Cursor MCP settings.
+   ```json
+   {
+     "mcpServers": {
+       "olteststack": {
+         "command": "bun",
+         "args": ["run", "dev"],
+         "cwd": "/absolute/path/to/OLTestStack"
+       }
+     }
+   }
+   ```
+2. **Use the project config:** this repo ships [`.cursor/mcp.json`](../../.cursor/mcp.json) with the correct `cwd`. Open the repo as the Cursor workspace root so Cursor picks it up, or copy the block into **Cursor Settings → MCP** and replace `cwd` with your clone path.
+3. **Global MCP config:** if you configure `olteststack` in user-level MCP settings (`~/.cursor/mcp.json` or Cursor Settings → MCP), you **must** set `cwd` to your cloned repo path on every machine — do not omit `cwd` or assume Cursor infers it from the open folder.
+4. **Verify locally:**
+   ```bash
+   cd /absolute/path/to/OLTestStack
+   bun run dev
+   ```
+   You should see `[olteststack] MCP server started on stdio` on stderr. Press Ctrl+C to stop.
+5. **Fallback — skip the `dev` script:** if `cwd` cannot be set (some clients), run the entry file directly:
+   ```json
+   {
+     "mcpServers": {
+       "olteststack": {
+         "command": "bun",
+         "args": ["run", "src/index.ts"],
+         "cwd": "/absolute/path/to/OLTestStack"
+       }
+     }
+   }
+   ```
+   `cwd` is still required so Bun resolves imports and `package.json` dependencies.
 
 ### Chromium not found
 
-**Symptoms:** `browser.launch` fails with a launch or executable error.
+**Symptoms:** `browser_launch` fails with a launch or executable error.
 
 **Fixes:**
 
@@ -377,15 +439,32 @@ bun run test
    ```
 3. On Linux CI/Docker, Chromium is preinstalled in the Docker image; ensure `CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser`.
 
-### Port conflicts (PostgreSQL / HTTP)
+### Port conflicts (`address already in use`)
 
-**Symptoms:** `docker compose up` fails; connection refused on `localhost:5433`, `8081`, or `8082`.
+**Symptoms:** `docker compose up` fails with `bind: address already in use` on port 8081, 8082, 8091, or 8092; or `connection refused` on the expected URL.
+
+**Common cause:** `bun run dev:http` (or another service) already owns **8081** / **8082** on the host while Docker tries to bind the same ports. Docker defaults now use **8091** (health) and **8092** (MCP) on the host so you can run local HTTP dev and the container side by side.
+
+**Find what is using a port:**
+
+```bash
+lsof -i :8081    # local dev:http health
+lsof -i :8082    # local dev:http MCP
+lsof -i :8091    # Docker health host mapping
+lsof -i :8092    # Docker MCP host mapping
+lsof -i :5433    # Docker Postgres
+```
 
 **Fixes:**
 
-1. Check if ports are in use: `lsof -i :5433`, `lsof -i :8081`, `lsof -i :8082`
-2. Stop conflicting services or change `POSTGRES_HOST_PORT`, `APP_HOST_PORT`, `MCP_HOST_PORT` in `.env`
-3. Ensure `DATABASE_URL` matches the host port you configured
+1. Stop the conflicting process (e.g. Ctrl+C on `bun run dev:http`, or `kill <PID>` from `lsof` output).
+2. Or change host ports in `.env` without touching container listen ports:
+   ```bash
+   APP_HOST_PORT=8191
+   MCP_HOST_PORT=8192
+   ```
+   Then restart: `bun run docker:app` and curl `http://localhost:8191/health`.
+3. For Postgres conflicts, set `POSTGRES_HOST_PORT` and update `DATABASE_URL` to match.
 
 ### MCP HTTP returns 400 / missing session
 
@@ -399,30 +478,30 @@ bun run test
 
 ### Session errors (`SESSION_NOT_FOUND`)
 
-**Symptoms:** `page.navigate` or `page.elements` returns `SESSION_NOT_FOUND`.
+**Symptoms:** `page_navigate` or `page_elements` returns `SESSION_NOT_FOUND`.
 
 **Causes and fixes:**
 
 | Cause | Fix |
 |-------|-----|
-| Stale `pageId` or `browserId` from a previous session | Call `browser.launch` and `page.create` again |
-| Browser was closed | IDs are invalidated after `browser.close` |
+| Stale `pageId` or `browserId` from a previous session | Call `browser_launch` and `page_create` again |
+| Browser was closed | IDs are invalidated after `browser_close` |
 | MCP server restarted | In-memory sessions are lost; start a new browser |
 | Wrong ID copied from an old message | Always use IDs from the most recent success response |
 
 ### Element errors (`ELEMENT_NOT_FOUND`)
 
-**Symptoms:** `page.find` returns no match.
+**Symptoms:** `page_find` returns no match.
 
 **Fixes:**
 
-1. Call `page.elements` after every `page.navigate` or `page.reload` (element IDs are invalidated on navigation)
+1. Call `page_elements` after every `page_navigate` or `page_reload` (element IDs are invalidated on navigation)
 2. Use a shorter or partial query (matching is case-insensitive substring on text, role, or aria-label)
-3. Set `includeHidden: true` in `page.elements` if the control is not visible
+3. Set `includeHidden: true` in `page_elements` if the control is not visible
 
 ### Navigation timeout (`TIMEOUT`)
 
-**Symptoms:** `page.navigate` fails with `TIMEOUT`.
+**Symptoms:** `page_navigate` fails with `TIMEOUT`.
 
 **Fixes:**
 
@@ -434,15 +513,16 @@ bun run test
 
 **Fixes:**
 
-1. Verify `cwd` in `mcp.json` points to the project root (where `package.json` lives)
-2. Ensure `bun` is on the PATH the MCP client uses
-3. Check MCP client logs for startup errors (often stderr from the server process)
-4. For HTTP mode, confirm `curl` initialize works before debugging the client
-5. Restart the MCP client after config changes
+1. See [Script not found "dev"](#script-not-found-dev--mcp-connection-closed--32000) if the server fails to start
+2. Verify `cwd` in `mcp.json` points to the project root (where `package.json` lives)
+3. Ensure `bun` is on the PATH the MCP client uses
+4. Check MCP client logs for startup errors (often stderr from the server process)
+5. For HTTP mode, confirm `curl` initialize works before debugging the client
+6. Restart the MCP client after config changes
 
 ### Orphan Chromium processes
 
-Always call `browser.close` when finished. If processes linger after a crash:
+Always call `browser_close` when finished. If processes linger after a crash:
 
 ```bash
 pkill -f "chrome.*olteststack"   # adjust pattern for your OS

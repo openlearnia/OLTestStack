@@ -8,6 +8,8 @@
 
 Implement the MCP server that registers, validates, and dispatches all browser testing tools. External-facing API layer that AI agents interact with. Handles MCP protocol transport, tool schema definitions, input validation, error mapping, and response formatting.
 
+**Cursor MCP naming:** Registered tool names use underscores (`browser_launch`, `page_navigate`, …) because Cursor filters out names containing dots. Requirements and docs may refer to conceptual dot notation (`browser.launch`); both forms are accepted at dispatch time.
+
 ---
 
 ## Feature Index

@@ -1,6 +1,8 @@
 import type { RecordedEvent } from '../core/types/sessions.js';
+import type { ResolvedConfig } from '../core/config/load-config.js';
 import type { Database } from './client.js';
 import { recordedEvents, testReports } from './schema.js';
+import { computeSessionExpiresAt } from './session-lifecycle.js';
 
 export interface PersistableTestReport {
   browserId?: string;
@@ -37,7 +39,10 @@ export async function persistTestReport(
   db: Database,
   report: PersistableTestReport,
   events: RecordedEvent[] = [],
+  config?: Pick<ResolvedConfig, 'sessionTtlHours'>,
 ): Promise<string> {
+  const expiresAt = computeSessionExpiresAt(config?.sessionTtlHours);
+
   const [inserted] = await db
     .insert(testReports)
     .values({
@@ -54,6 +59,9 @@ export async function persistTestReport(
       executionTimeMs: report.executionTimeMs,
       startedAt: new Date(report.startedAt),
       completedAt: new Date(report.completedAt),
+      saved: false,
+      expiresAt,
+      savedAt: null,
     })
     .returning({ id: testReports.id });
 

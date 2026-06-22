@@ -19,6 +19,7 @@ export const browserCloseSchema = {
   type: 'object',
   properties: {
     browserId: { type: 'string', format: 'uuid' },
+    testName: { type: 'string', description: 'Optional test name for report persistence' },
   },
   required: ['browserId'],
   additionalProperties: false,
@@ -214,5 +215,169 @@ export const pageWaitSchema = {
     timeoutMs: { type: 'integer', minimum: 1000, default: 30000 },
   },
   required: ['pageId', 'condition'],
+  additionalProperties: false,
+} as const;
+
+export const assertExistsSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    query: { type: 'string', minLength: 1 },
+    elementId: { type: 'string', format: 'uuid' },
+  },
+  required: ['pageId'],
+  additionalProperties: false,
+} as const;
+
+export const assertTextSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    contains: { type: 'string', minLength: 1 },
+    match: {
+      type: 'string',
+      enum: ['contains', 'equals'],
+      default: 'contains',
+    },
+  },
+  required: ['pageId', 'contains'],
+  additionalProperties: false,
+} as const;
+
+export const assertUrlSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    url: { type: 'string', minLength: 1 },
+    match: {
+      type: 'string',
+      enum: ['equals', 'contains'],
+      default: 'contains',
+    },
+  },
+  required: ['pageId', 'url'],
+  additionalProperties: false,
+} as const;
+
+export const assertNetworkSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    url: { type: 'string', minLength: 1, description: 'URL substring to match' },
+    status: {
+      oneOf: [
+        { type: 'integer', minimum: 100, maximum: 599 },
+        { type: 'string', pattern: '^[1-5]xx$' },
+      ],
+      description: 'Exact status code (200) or range (2xx)',
+    },
+  },
+  required: ['pageId', 'url', 'status'],
+  additionalProperties: false,
+} as const;
+
+export const sessionExportSchema = {
+  type: 'object',
+  properties: {
+    browserId: { type: 'string', format: 'uuid' },
+    name: {
+      type: 'string',
+      description: 'Optional script name. Defaults to session-<browserId prefix>.',
+    },
+    goal: {
+      type: 'string',
+      description: 'Optional natural-language goal stored in the exported script.',
+    },
+  },
+  required: ['browserId'],
+  additionalProperties: false,
+} as const;
+
+export const saveSessionSchema = {
+  type: 'object',
+  properties: {
+    reportId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Persisted test report id (from dashboard or after browser_close)',
+    },
+    sessionId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Alias for reportId',
+    },
+    name: {
+      type: 'string',
+      description: 'Optional new display name when promoting to saved',
+    },
+  },
+  additionalProperties: false,
+} as const;
+
+export const testRunSchema = {
+  type: 'object',
+  properties: {
+    goal: {
+      type: 'string',
+      minLength: 1,
+      description: 'Natural language description of the test objective.',
+    },
+    name: {
+      type: 'string',
+      description: 'Optional test name for the report. Defaults to goal.',
+    },
+    url: {
+      type: 'string',
+      format: 'uri',
+      description: 'Starting URL to navigate to.',
+    },
+    steps: {
+      type: 'array',
+      description:
+        'Optional explicit step sequence. If omitted, returns agent-driven guidance unless script or scriptFile is provided.',
+      items: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: [
+              'navigate',
+              'click',
+              'type',
+              'press',
+              'scroll',
+              'wait',
+              'screenshot',
+              'assert.exists',
+              'assert.text',
+              'assert.url',
+              'assert.network',
+            ],
+          },
+        },
+        required: ['action'],
+      },
+    },
+    script: {
+      type: 'object',
+      description: 'Inline replay script (.olteststack.json shape) with ordered steps.',
+      properties: {
+        version: { type: 'string', enum: ['1.0'] },
+        name: { type: 'string' },
+        goal: { type: 'string' },
+        url: { type: 'string' },
+        steps: { type: 'array' },
+      },
+      required: ['version', 'name', 'steps'],
+    },
+    scriptFile: {
+      type: 'string',
+      description: 'Path to a .olteststack.json replay script on the MCP server filesystem.',
+    },
+    headless: { type: 'boolean', default: true },
+    stopOnFailure: { type: 'boolean', default: true },
+    timeoutMs: { type: 'integer', minimum: 5000, default: 60000 },
+  },
+  required: ['goal'],
   additionalProperties: false,
 } as const;

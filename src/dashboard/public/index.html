@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sessions — OLTestStack</title>
+  <link rel="stylesheet" href="/dashboard/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/dashboard/" class="brand">
+        <span class="brand-mark">OL</span>
+        <span class="brand-text">TestStack Sessions</span>
+      </a>
+      <button type="button" id="theme-toggle" class="btn btn-ghost" aria-label="Toggle theme">Theme</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div class="panel-header">
+        <h1>Test sessions</h1>
+        <p class="muted">Sessions persist when <code>DATABASE_URL</code> is set. Unsaved sessions expire after <code>SESSION_TTL_HOURS</code> (default 24h).</p>
+      </div>
+
+      <div class="toolbar">
+        <label class="field">
+          <span class="field-label">Search</span>
+          <input type="search" id="search" placeholder="Test name…" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">Status</span>
+          <select id="status-filter">
+            <option value="">All</option>
+            <option value="passed">Passed</option>
+            <option value="failed">Failed</option>
+            <option value="error">Error</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Persistence</span>
+          <select id="persistence-filter">
+            <option value="">All</option>
+            <option value="saved">Saved</option>
+            <option value="expiring">Expiring</option>
+          </select>
+        </label>
+        <button type="button" id="refresh" class="btn btn-primary">Refresh</button>
+      </div>
+
+      <div id="banner" class="banner hidden" role="status"></div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Test</th>
+              <th>Status</th>
+              <th>Persistence</th>
+              <th>Duration</th>
+              <th>Actions</th>
+              <th>Assertions</th>
+              <th>Events</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="sessions-body">
+            <tr><td colspan="8" class="loading">Loading sessions…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <nav id="pagination" class="pagination" aria-label="Pagination"></nav>
+    </section>
+  </main>
+
+  <script src="/dashboard/app.js"></script>
+  <script>
+    initThemeToggle();
+    initSessionsList();
+  </script>
+</body>
+</html>

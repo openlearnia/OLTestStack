@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "name": "Example login flow",
+  "goal": "Verify login redirects to dashboard",
+  "url": "https://example.com/login",
+  "recordedAt": "2026-06-21T10:00:00.000Z",
+  "steps": [
+    { "action": "type", "query": "Email", "value": "user@example.com" },
+    { "action": "type", "query": "Password", "value": "secret" },
+    { "action": "click", "query": "Sign In" },
+    { "action": "assert.url", "url": "/dashboard", "match": "contains" },
+    { "action": "assert.text", "contains": "Welcome", "match": "contains" }
+  ]
+}
