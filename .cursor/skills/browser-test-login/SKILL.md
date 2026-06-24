@@ -11,7 +11,7 @@ disable-model-invocation: true
 
 ## Prerequisites
 
-- OLTestStack MCP server connected (19 implemented tools)
+- OLTestStack MCP server connected (**38** tools)
 - Target login URL (`https://`, `http://`, or `file://`)
 - Test credentials (or local fixture: `fixtures/sample-app/index.html` accepts any values)
 
@@ -64,7 +64,7 @@ Navigation **invalidates** all prior `elementId` values.
 
 ### 4. Discover fields
 
-Use `page_find` for each control:
+Use `page_find` for each control, or `page_type_query` / `page_click_query` to skip the two-step dance:
 
 ```json
 { "pageId": "<pageId>", "query": "Email" }
@@ -76,13 +76,23 @@ If `ELEMENT_NOT_FOUND`, call `page_elements` and pick controls by role (`textbox
 
 ### 5. Interact
 
+By elementId (pass `query` from find for replayable recordings):
+
 ```json
-{ "pageId": "<pageId>", "elementId": "<emailId>", "value": "user@example.com" }
-{ "pageId": "<pageId>", "elementId": "<passwordId>", "value": "secret" }
-{ "pageId": "<pageId>", "elementId": "<submitId>" }
+{ "pageId": "<pageId>", "elementId": "<emailId>", "value": "user@example.com", "query": "Email" }
+{ "pageId": "<pageId>", "elementId": "<passwordId>", "value": "secret", "query": "Password" }
+{ "pageId": "<pageId>", "elementId": "<submitId>", "query": "Submit" }
 ```
 
-Last call is `page_click`.
+Or atomically:
+
+```json
+{ "pageId": "<pageId>", "query": "Email", "value": "user@example.com" }
+{ "pageId": "<pageId>", "query": "Password", "value": "secret" }
+{ "pageId": "<pageId>", "query": "Submit" }
+```
+
+Last click uses `page_click` or `page_click_query`.
 
 ### 6. Synchronize
 
@@ -92,11 +102,11 @@ Prefer `page_wait` over arbitrary delays:
 { "pageId": "<pageId>", "condition": "url", "value": "/dashboard", "match": "contains" }
 ```
 
-Or `{ "condition": "networkIdle" }` for SPA/API-driven redirects.
+Or `{ "condition": "networkIdle" }` for SPA/API-driven redirects. Use `networkRequest` to wait for a specific auth API call.
 
 ### 7. Verify
 
-Use `assert_url`, `assert_text`, and `assert_exists`, or verify with:
+Use `assert_url`, `assert_text`, and `assert_exists` (with `negate`/`soft` as needed), or:
 
 - `page_wait` (URL condition)
 - `page_text` or `page_snapshot` for welcome content
@@ -106,10 +116,11 @@ Use `assert_url`, `assert_text`, and `assert_exists`, or verify with:
 
 ```json
 { "pageId": "<pageId>", "fullPage": true }
+{ "pageId": "<pageId>", "returnInline": true }
 { "pageId": "<pageId>", "level": "error" }
 ```
 
-Screenshot and console calls respectively.
+`page_screenshot` returns `data.url` when health server is up (local `8081`, Docker `8091`). Use `returnInline: true` for MCP inline image.
 
 ### 9. Cleanup (required)
 
@@ -118,6 +129,8 @@ Always call `browser_close` in a finally block:
 ```json
 { "browserId": "<browserId>" }
 ```
+
+When persistence is enabled, `data.reportId` is returned — use with `session_export` or `save_session` if needed.
 
 ## Error recovery
 

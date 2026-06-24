@@ -839,6 +839,7 @@ Capture a PNG screenshot of the page viewport or full scrollable page. Saves to 
 |-------|------|----------|---------|
 | `pageId` | string (UUID) | yes | — |
 | `fullPage` | boolean | no | `false` |
+| `returnInline` | boolean | no | `false` | Also return inline PNG in MCP image content when under 1MB |
 
 **Example input**
 
@@ -856,12 +857,17 @@ Capture a PNG screenshot of the page viewport or full scrollable page. Saves to 
   "ok": true,
   "data": {
     "file": "./screenshots/2026-06-21T12-00-00-000Z_b2c3d4e5-f6a7-8901-bcde-f12345678901.png",
+    "url": "http://localhost:8081/api/screenshots/2026-06-21T12-00-00-000Z_b2c3d4e5-f6a7-8901-bcde-f12345678901.png",
     "width": 1280,
     "height": 2400,
     "fullPage": true
   }
 }
 ```
+
+The `url` field is included when the health/dashboard HTTP server is enabled (`HEALTH_PORT`, `DASHBOARD_ENABLED`, or `MCP_TRANSPORT=http`). In Docker, use `APP_HOST_PORT` (host-mapped port, default `8091`) and optionally `SCREENSHOT_PUBLIC_HOST` for the hostname.
+
+**Agent workflow:** Prefer `curl` or `fetch` on `data.url` to retrieve the PNG. Fall back to reading `data.file` from disk when running stdio-only without a health server. Set `returnInline: true` for a small inline image in the MCP response (in addition to `url` when available).
 
 **Error cases**
 
@@ -871,7 +877,7 @@ Capture a PNG screenshot of the page viewport or full scrollable page. Saves to 
 | `SESSION_NOT_FOUND` | Page not found |
 | `INTERNAL_ERROR` | Capture or file write failure |
 
-**Agent workflow:** Capture on success and failure for evidence. Screenshot events are recorded when `recordingEnabled` is true.
+Screenshot events are recorded when `recordingEnabled` is true.
 
 ---
 
@@ -1640,7 +1646,14 @@ Dump full in-memory browser session state as a structured debug report. Generate
       "events": [],
       "eventCount": 0,
       "registrySnapshot": { "pages": [] },
-      "note": "Submit button click did not navigate"
+      "note": "Submit button click did not navigate",
+      "screenshots": [
+        {
+          "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+          "file": "./screenshots/debug/b2c3d4e5-f6a7-8901-bcde-f12345678901.png",
+          "url": "http://localhost:8081/api/screenshots/b2c3d4e5-f6a7-8901-bcde-f12345678901.png"
+        }
+      ]
     }
   }
 }

@@ -1,6 +1,6 @@
 # Agent Workflows
 
-How AI agents should use the OLTestStack MCP server for reliable browser testing. These patterns apply to all **27 implemented tools**.
+How AI agents should use the OLTestStack MCP server for reliable browser testing. These patterns apply to all **38 implemented tools** (underscore names only).
 
 ## Recommended workflow pattern
 
@@ -12,21 +12,25 @@ launch → create page → navigate → discover elements → interact → wait 
 
 ### Phase mapping
 
-| Step | Tool(s) | Status |
-|------|---------|--------|
-| Launch browser | `browser_launch` | ✅ Implemented |
-| Open tab | `page_create` | ✅ Implemented |
-| Go to URL | `page_navigate` | ✅ Implemented |
-| Discover UI | `page_elements`, `page_find` | ✅ Implemented |
-| Interact | `page_click`, `page_type`, `page_press`, `page_scroll` | ✅ Implemented |
-| Synchronize | `page_wait` | ✅ Implemented |
-| Verify | `assert_exists`, `assert_text`, `assert_url`, `assert_network` | ✅ Implemented |
-| Capture evidence | `page_screenshot`, `page_snapshot`, `page_text`, `page_html` | ✅ Implemented |
-| Observe | `page_network`, `page_console` | ✅ Implemented |
-| Export session | `session_export` | ✅ Implemented |
-| Debug dump | `send_report` | ✅ Implemented |
-| Run scripted test | `test_run` | ✅ Implemented |
-| Cleanup | `browser_close` | ✅ Implemented |
+| Step | Tool(s) |
+|------|---------|
+| Launch browser | `browser_launch` |
+| Open tab | `page_create` |
+| Go to URL | `page_navigate` |
+| Discover UI | `page_elements`, `page_find` |
+| Interact | `page_click`, `page_click_query`, `page_type`, `page_type_query`, `page_select`, `page_upload`, `page_press`, `page_scroll` |
+| Synchronize | `page_wait` (`element`, `elementHidden`, `url`, `networkIdle`, `networkRequest`) |
+| Verify | `assert_*`, `page_assert_state` (`negate`, `soft` supported) |
+| Capture evidence | `page_screenshot` (`url`, `returnInline`), `page_snapshot`, `page_text`, `page_html` |
+| Observe | `page_network`, `page_console` |
+| Frames / cookies | `page_frame`, `page_cookies` |
+| Session introspection | `session_status`, `session_get`, `session_list` |
+| Export session | `session_export` (`browserId` live or `reportId` post-close) |
+| Promote session | `save_session` |
+| Debug dump | `send_report` |
+| Lint script | `script_lint` |
+| Run scripted test | `test_run` (`script`, `scriptFile`, `scripts[]`, `suiteFile`, `${VAR}` variables) |
+| Cleanup | `browser_close` (returns `reportId` when persistence enabled) |
 
 ## Stateless command pattern
 
@@ -36,6 +40,7 @@ Every MCP tool call is **stateless at the protocol level**. The server maintains
 browserId  — from browser_launch
 pageId     — from page_create
 elementId  — from page_elements or page_find
+reportId   — from browser_close (when persistence enabled)
 ```
 
 ### Rules
@@ -74,6 +79,10 @@ page_navigate  →  page_elements (or page_find)  →  interact
 
 Skipping rediscovery causes `ELEMENT_NOT_FOUND` on `page_click` and `page_type`.
 
+### Query tools for grids
+
+Prefer **`page_click_query`** / **`page_type_query`** over find+click for data grids and toolbars. Use `preferRegion` (`toolbar`, `filter`, `grid-header`, `grid-body`) to disambiguate. Pass `query` from `page_find` into `page_click` / `page_type` so recordings capture replayable queries.
+
 ### Query tips for `page_find`
 
 - Matching is **case-insensitive substring** on visible text, role, and aria-label
@@ -97,8 +106,10 @@ Use `page_wait` to reduce flakiness after actions that trigger async updates:
 | Condition | Use when |
 |-----------|----------|
 | `element` | A control appears after async render (SPA, lazy load) |
+| `elementHidden` | A spinner/overlay must disappear before interacting |
 | `url` | Post-login redirect or client-side routing |
 | `networkIdle` | XHR/fetch must finish before verifying (API-driven UI) |
+| `networkRequest` | A specific API call must complete (URL substring + status) |
 | `timeout` | Fixed delay as last resort |
 
 **Example:** After `page_click` on Submit, wait for URL change before screenshot:
@@ -140,10 +151,17 @@ Setup:
 
 ```bash
 cp .env.example .env
-bun run docker:up
+docker compose up -d postgres
 bun run db:migrate
 export PERSIST_RECORDING=true
 export DATABASE_URL=postgresql://oltest:oltest@localhost:5433/olteststack
+```
+
+Full Docker stack (MCP HTTP on host **8092**, health/dashboard on **8091**):
+
+```bash
+docker compose run --rm migrate
+docker compose up -d --build
 ```
 
 Inspect reports with `bun run db:studio` or query the database directly.
@@ -152,14 +170,17 @@ Inspect reports with `bun run db:studio` or query the database directly.
 
 **`session_export`** converts a recording into a `.olteststack.json` replay script. Pass `browserId` while the session is open, or `reportId`/`sessionId` after `browser_close` to rebuild from PostgreSQL `recorded_events`.
 
-**`test_run`** executes explicit steps or a saved script and returns a structured `TestReport`:
+**`test_run`** executes explicit steps, a saved script, or a suite and returns a structured `TestReport`:
 
 ```json
 {
   "goal": "Replay login",
-  "scriptFile": "fixtures/sample-app/login.olteststack.json"
+  "scriptFile": "fixtures/sample-app/login.olteststack.json",
+  "variables": { "EMAIL": "user@example.com" }
 }
 ```
+
+Suites: pass `scripts: ["a.olteststack.json", "b.olteststack.json"]` or `suiteFile`. Scripts support `${VAR}` substitution. Use `script_lint` to validate before replay. Assert tools support `negate` and `soft`; `test_run` honors `softFailures`.
 
 Goal-only `test_run` (no steps/script) returns agent-driven guidance with suggested tools.
 
@@ -210,13 +231,13 @@ browser_launch
 browser_launch
   → page_create
   → page_navigate (file://.../fixtures/sample-app/index.html)
-  → page_find ("Email")     → page_type
-  → page_find ("Password")  → page_type
-  → page_find ("Submit")    → page_click
+  → page_type_query ("Email", value)
+  → page_type_query ("Password", value)
+  → page_click_query ("Submit")
   → page_wait (networkIdle or url)
-  → page_screenshot
+  → page_screenshot (fetch data.url or returnInline)
   → page_console (level: error)
-  → browser_close
+  → browser_close (capture reportId if persistence on)
 ```
 
 ### CRUD create flow
@@ -225,9 +246,9 @@ browser_launch
 browser_launch
   → page_create
   → page_navigate (app list view)
-  → page_find ("Add")       → page_click
-  → page_find ("Name")      → page_type
-  → page_find ("Save")      → page_click
+  → page_click_query ("Add", preferRegion: toolbar)
+  → page_type_query ("Name", value)
+  → page_click_query ("Save")
   → page_wait (networkIdle)
   → page_network (filter: /api/items)
   → page_find (item name)   → confirm visible

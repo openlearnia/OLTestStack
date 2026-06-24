@@ -213,7 +213,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'page_screenshot',
     description:
-      'Capture a PNG screenshot of the page viewport or full scrollable page. Saves to SCREENSHOT_DIR. Example: { "pageId": "..." }.',
+      'Capture a PNG screenshot of the page viewport or full scrollable page. Saves to SCREENSHOT_DIR and returns a fetchable HTTP URL when the health server is enabled. Example: { "pageId": "..." }.',
     inputSchema: pageScreenshotSchema as unknown as Record<string, unknown>,
     handler: (input) => captureScreenshot(ctx, input),
   });

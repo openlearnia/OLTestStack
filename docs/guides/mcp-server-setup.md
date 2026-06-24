@@ -59,7 +59,7 @@ This starts the MCP server on stdio. The process blocks until the client disconn
 bun run dev:http
 ```
 
-Starts Streamable HTTP on `http://127.0.0.1:8082/mcp` plus health on `http://127.0.0.1:8081/health`.
+Starts Streamable HTTP on `http://127.0.0.1:8082/mcp` plus health on `http://127.0.0.1:8081/health`. Screenshot tools return fetchable URLs on the health port (e.g. `http://localhost:8081/api/screenshots/<filename>.png`).
 
 Or set env vars explicitly:
 
@@ -323,6 +323,8 @@ Copy `.env.example` to `.env` for local development. Variables can also be set i
 | `DB_PORT` | `5433` | Documented Docker host port for Postgres |
 | `HEALTH_PORT` | — | App listen port for health (`8081`; container side in Docker) |
 | `APP_HOST_PORT` | `8091` | Docker host port mapped to `HEALTH_PORT` |
+| `SCREENSHOT_PUBLIC_HOST` | `localhost` | Hostname in `page_screenshot` / `send_report` screenshot URLs |
+| `DASHBOARD_ENABLED` | `true` when `HEALTH_PORT` or HTTP MCP | Session dashboard + `/api/screenshots` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `oltest` / `oltest` / `olteststack` | Docker Compose credentials (dev only) |
 
 ## Security notes (HTTP mode)
@@ -579,6 +581,20 @@ pkill -f "chrome.*olteststack"   # adjust pattern for your OS
 ```
 
 Wrap agent workflows in try/finally semantics: launch once, close in cleanup.
+
+### Screenshot evidence (agent workflow)
+
+When `HEALTH_PORT` is set (or `bun run dev:http` / Docker with `APP_HOST_PORT`), `page_screenshot` returns both `file` and `url`:
+
+```bash
+# After page_screenshot — fetch PNG over HTTP (preferred)
+curl -o evidence.png "http://localhost:8081/api/screenshots/2026-06-21T12-00-00-000Z_<pageId>.png"
+
+# Docker host mapping (default APP_HOST_PORT=8091)
+curl -o evidence.png "http://localhost:8091/api/screenshots/<filename>.png"
+```
+
+In stdio-only mode without a health server, `url` is omitted — read `data.file` from the workspace instead. Optional `returnInline: true` on `page_screenshot` adds inline PNG content for images under 1MB.
 
 ## Next steps
 

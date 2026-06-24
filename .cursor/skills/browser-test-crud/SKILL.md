@@ -11,7 +11,7 @@ disable-model-invocation: true
 
 ## Prerequisites
 
-- OLTestStack MCP server connected (19 implemented tools)
+- OLTestStack MCP server connected (**38** tools)
 - App base URL with list and create/edit views
 - Unique test data identifiers (item name, SKU, etc.)
 
@@ -33,51 +33,63 @@ browser_launch → page_create → page_navigate (app base URL) → page_element
 
 Use `page_elements` to map the list view (table rows, cards, action buttons).
 
+## Grids and data tables
+
+Prefer **`page_click_query`** / **`page_type_query`** over find+click for grid cells and toolbar actions:
+
+```json
+{ "pageId": "<pageId>", "query": "Add", "preferRegion": "toolbar" }
+{ "pageId": "<pageId>", "query": "Item Name", "value": "Widget-42", "preferRegion": "grid-body" }
+```
+
+`preferRegion`: `toolbar`, `filter`, `grid-header`, `grid-body`.
+
 ## Create
 
-1. `page_find` "Add" or "New" → `page_click`
-2. `page_find` + `page_type` for each form field
-3. `page_find` "Save" → `page_click`
-4. `page_wait` — `networkIdle` or URL change
-5. Verify: `page_find` with created item name (or `assert_text` / `page_text`)
+1. `page_click_query` "Add" or "New" (or `page_find` → `page_click`)
+2. `page_type_query` or `page_find` + `page_type` for each form field
+3. `page_click_query` "Save" → click
+4. `page_wait` — `networkIdle`, `networkRequest`, or URL change
+5. Verify: `assert_text` or `page_find` with created item name
 6. `page_network` with `filter: "/api/"` — confirm 2xx responses
-7. `page_screenshot` for evidence
+7. `page_screenshot` for evidence (`data.url` when health server up)
 
 ## Read
 
 1. `page_navigate` or `page_reload` to list view
-2. `page_find` with item name — confirm row/card exists
+2. `page_click_query` or `page_find` with item name — confirm row/card exists
 3. `page_screenshot` for evidence
 
 ## Update
 
-1. `page_find` item name → click edit action via `page_click`
-2. `page_type` into changed fields (re-discover after navigation to edit view)
-3. `page_find` "Save" → `page_click`
+1. `page_click_query` item name with `preferRegion: "grid-body"` → click edit action
+2. `page_type_query` into changed fields (re-discover after navigation to edit view)
+3. `page_click_query` "Save"
 4. `page_wait` (`networkIdle`)
-5. Verify updated text via `page_find` or `page_text`
+5. Verify updated text via `assert_text`, `page_find`, or `page_text`
 
 ## Delete
 
-1. `page_find` item → click delete via `page_click`
-2. Confirm dialog: `page_find` "Confirm" → `page_click`
-3. Verify absence: `page_find` should return `ELEMENT_NOT_FOUND`, or check `page_text`
+1. `page_click_query` item → click delete
+2. Confirm dialog: `page_click_query` "Confirm"
+3. Verify absence: `assert_exists` with `negate: true`, or `page_find` returns `ELEMENT_NOT_FOUND`
 
 ## Teardown
 
 Always `browser_close` with `{ "browserId": "<browserId>" }` in a finally block.
 
-When `PERSIST_RECORDING=true`, reports flush to PostgreSQL on close.
+When persistence is enabled, `browser_close` returns `reportId`. Reports flush to PostgreSQL; unsaved sessions expire after 24h unless promoted via `save_session`.
 
 ## Discovery tips
 
 | Situation | Tool |
 |-----------|------|
 | Unfamiliar list layout | `page_elements` |
-| Known button labels | `page_find` ("Delete", "Edit", "Save") |
-| After navigation | Re-run `page_elements` or `page_find` |
+| Known button labels | `page_click_query` or `page_find` |
+| Data grid cells | `page_click_query` / `page_type_query` + `preferRegion` |
+| After navigation | Re-run `page_elements` or query tools |
 | Off-screen items | `page_scroll` then re-discover |
-| Ambiguous matches (`matchCount > 1`) | `page_elements` to disambiguate |
+| Ambiguous matches (`matchCount > 1`) | `page_elements` or `preferRegion` / `candidateIndex` |
 
 ## Monitoring
 
@@ -90,21 +102,12 @@ After create/update/delete:
 
 Check `errorCount` in network/console responses.
 
-## Current limitations
-
-Validate outcomes with:
-
-- `page_wait` (URL or `networkIdle`)
-- `page_text` / `page_snapshot` for content checks
-- `page_find` (expect `ELEMENT_NOT_FOUND` when item should be gone)
-- `page_network` / `page_console` for API and JS errors
-
 ## Error recovery
 
 | Error | Action |
 |-------|--------|
 | `SESSION_NOT_FOUND` | Re-launch browser and create page |
-| `ELEMENT_NOT_FOUND` | `page_elements` → refine query |
+| `ELEMENT_NOT_FOUND` | `page_elements` → refine query or use `preferRegion` |
 | `TIMEOUT` on wait | Increase `timeoutMs` or change condition |
 | `BROWSER_CRASHED` | New `browser_launch` |
 

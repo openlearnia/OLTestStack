@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
@@ -9,6 +10,8 @@ import { registerTools } from './register-tools.js';
 function logError(message: string): void {
   console.error(`[olteststack] ${message}`);
 }
+
+const MAX_INLINE_SCREENSHOT_BYTES = 1_048_576;
 
 export function createMcpServer(ctx: AppContext): Server {
   const toolRegistry = registerTools(ctx);
@@ -39,13 +42,38 @@ export function createMcpServer(ctx: AppContext): Server {
     try {
       const result = await toolRegistry.dispatch(name, args ?? {});
 
+      const content: Array<
+        | { type: 'text'; text: string }
+        | { type: 'image'; data: string; mimeType: string }
+      > = [{ type: 'text', text: JSON.stringify(result, null, 2) }];
+
+      if (
+        name === 'page_screenshot' &&
+        result.ok &&
+        args &&
+        typeof args === 'object' &&
+        (args as { returnInline?: boolean }).returnInline === true &&
+        result.data &&
+        typeof result.data === 'object' &&
+        'file' in result.data &&
+        typeof result.data.file === 'string'
+      ) {
+        try {
+          const buffer = await readFile(result.data.file);
+          if (buffer.byteLength <= MAX_INLINE_SCREENSHOT_BYTES) {
+            content.push({
+              type: 'image',
+              data: buffer.toString('base64'),
+              mimeType: 'image/png',
+            });
+          }
+        } catch {
+          // Best-effort inline image; URL + file path remain in JSON text content.
+        }
+      }
+
       return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content,
         isError: !result.ok,
       };
     } catch (error) {

@@ -15,6 +15,10 @@ import {
 import { compareSessions } from './compare-sessions.js';
 import { exportSessionFromDatabase } from '../domain/recording/export-from-db.js';
 import type { AppContext } from '../core/context.js';
+import {
+  screenshotApiPathForFile,
+  screenshotBasename,
+} from '../core/screenshot-url.js';
 
 const PUBLIC_DIR = join(import.meta.dir, 'public');
 
@@ -59,38 +63,31 @@ async function serveStaticFile(relativePath: string): Promise<Response | null> {
   });
 }
 
-function screenshotBasename(path: string): string | null {
-  const normalized = path.replace(/\\/g, '/');
-  if (normalized.includes('..')) return null;
-  const parts = normalized.split('/');
-  const name = parts[parts.length - 1];
-  if (!name || name.includes('/')) return null;
-  return name;
-}
-
 async function serveScreenshot(config: ResolvedConfig, filename: string): Promise<Response> {
   if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
     return notFound();
   }
 
-  const filePath = resolve(config.screenshotDir, filename);
   const screenshotRoot = resolve(config.screenshotDir);
+  const candidates = [
+    resolve(screenshotRoot, filename),
+    resolve(screenshotRoot, 'debug', filename),
+  ];
 
-  if (!filePath.startsWith(screenshotRoot)) {
-    return notFound();
+  for (const filePath of candidates) {
+    if (!filePath.startsWith(screenshotRoot)) continue;
+    const file = Bun.file(filePath);
+    if (await file.exists()) {
+      return new Response(file, {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    }
   }
 
-  const file = Bun.file(filePath);
-  if (!(await file.exists())) {
-    return notFound('Screenshot not found');
-  }
-
-  return new Response(file, {
-    headers: {
-      'Content-Type': 'image/png',
-      'Cache-Control': 'private, max-age=3600',
-    },
-  });
+  return notFound('Screenshot not found');
 }
 
 async function handleSaveSession(
@@ -282,6 +279,7 @@ export async function handleDashboardRequest(
 }
 
 export function screenshotUrlForPath(path: string): string | null {
-  const name = screenshotBasename(path);
-  return name ? `/api/screenshots/${encodeURIComponent(name)}` : null;
+  return screenshotApiPathForFile(path);
 }
+
+export { screenshotBasename };

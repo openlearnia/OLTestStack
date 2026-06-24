@@ -8,6 +8,7 @@ import type { BrowserSession, Element, PageSession, RecordedEvent } from '../../
 import { toPublicElement } from '../../core/types/sessions.js';
 import { mapCdpError } from '../../cdp/error-mapper.js';
 import { resolvePageSession, toCdpPage } from '../shared/resolve-page.js';
+import { screenshotUrlForPath } from '../../core/screenshot-url.js';
 import { z } from 'zod';
 
 const sendReportSchema = z
@@ -32,7 +33,7 @@ export interface DebugReportPayload {
     pages: RegistryPageSnapshot[];
   };
   note?: string;
-  screenshots?: Array<{ pageId: string; file: string }>;
+  screenshots?: Array<{ pageId: string; file: string; url?: string }>;
 }
 
 export interface SendReportResult {
@@ -67,8 +68,8 @@ async function buildRegistrySnapshot(
 async function capturePageScreenshots(
   ctx: AppContext,
   pageIds: string[],
-): Promise<Array<{ pageId: string; file: string }>> {
-  const screenshots: Array<{ pageId: string; file: string }> = [];
+): Promise<Array<{ pageId: string; file: string; url?: string }>> {
+  const screenshots: Array<{ pageId: string; file: string; url?: string }> = [];
   const screenshotDir = join(ctx.config.screenshotDir, 'debug');
   await mkdir(screenshotDir, { recursive: true });
 
@@ -82,7 +83,10 @@ async function capturePageScreenshots(
       const filename = `${pageId}.png`;
       const filePath = join(screenshotDir, filename);
       await writeFile(filePath, buffer);
-      screenshots.push({ pageId, file: filePath });
+      const entry: { pageId: string; file: string; url?: string } = { pageId, file: filePath };
+      const url = screenshotUrlForPath(filePath, ctx.config);
+      if (url) entry.url = url;
+      screenshots.push(entry);
     } catch {
       // Best-effort — omit pages that fail to capture
     }

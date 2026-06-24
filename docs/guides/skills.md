@@ -64,6 +64,8 @@ OLTestStack/
 ├── .cursor/
 │   ├── mcp.json                    # MCP server config
 │   └── skills/
+│       ├── olteststack-mcp/
+│       │   └── SKILL.md
 │       ├── browser-test-login/
 │       │   └── SKILL.md
 │       ├── browser-test-crud/
@@ -105,7 +107,7 @@ disable-model-invocation: true
 
 ## Prerequisites
 
-- OLTestStack MCP server connected (all 19 tools through Phase 8)
+- OLTestStack MCP server connected (all **38** tools)
 - Target login URL (or `fixtures/sample-app/index.html` for local demo)
 
 ## Workflow
@@ -126,18 +128,23 @@ disable-model-invocation: true
    If `page_find` returns `ELEMENT_NOT_FOUND`, call `page_elements` and pick controls by role (`textbox`, `button`).
 
 5. **Interact** — Fill and submit the form:
-   - `page_type` with `{ "pageId": "<pageId>", "elementId": "<email elementId>", "value": "user@example.com" }`
-   - `page_type` with `{ "pageId": "<pageId>", "elementId": "<password elementId>", "value": "secret" }`
-   - `page_click` with `{ "pageId": "<pageId>", "elementId": "<submit elementId>" }`
+   - `page_type_query` with `{ "pageId": "<pageId>", "query": "Email", "value": "user@example.com" }`
+   - `page_type_query` with `{ "pageId": "<pageId>", "query": "Password", "value": "secret" }`
+   - `page_click_query` with `{ "pageId": "<pageId>", "query": "Submit" }`
+
+   Or by elementId (pass `query` from `page_find` for replayable recordings):
+   - `page_type` with `{ "pageId": "<pageId>", "elementId": "<email elementId>", "value": "user@example.com", "query": "Email" }`
+   - `page_type` with `{ "pageId": "<pageId>", "elementId": "<password elementId>", "value": "secret", "query": "Password" }`
+   - `page_click` with `{ "pageId": "<pageId>", "elementId": "<submit elementId>", "query": "Submit" }`
 
 6. **Synchronize** — `page_wait` after submit:
    - `{ "pageId": "<pageId>", "condition": "networkIdle" }` or URL condition for redirect
 
-7. **Verify** — use `assert_url` / `assert_text`, or `page_wait` with a URL condition, or `page_text` / `page_snapshot` to confirm expected content.
+7. **Verify** — use `assert_url` / `assert_text` / `assert_exists`, or `page_wait` with a URL condition, or `page_text` / `page_snapshot` to confirm expected content.
 
-8. **Evidence** — `page_screenshot` with `{ "pageId": "<pageId>" }`. Optionally `page_console` with `{ "level": "error" }`.
+8. **Evidence** — `page_screenshot` with `{ "pageId": "<pageId>" }` — returns `data.url` when health server is up; set `returnInline: true` for MCP inline image. Optionally `page_console` with `{ "level": "error" }`.
 
-9. **Cleanup** — Always call `browser_close` with `{ "browserId": "<browserId>" }` in a finally block.
+9. **Cleanup** — Always call `browser_close` with `{ "browserId": "<browserId>" }` in a finally block. Capture `reportId` when persistence is enabled.
 
 ## Error recovery
 
@@ -185,38 +192,39 @@ disable-model-invocation: true
 
 ### Create
 
-1. `page_find` "Add" or "New" → `page_click`
-2. Fill form fields via `page_find` + `page_type`
-3. `page_find` "Save" → `page_click`
+1. `page_click_query` "Add" or "New" (or `page_find` → `page_click`)
+2. Fill form fields via `page_type_query` or `page_find` + `page_type`
+3. `page_click_query` "Save"
 4. `page_wait` for network idle or URL change
 5. `assert_text` with created item name — or `page_find` / `page_text`
 
 ### Read
 
 1. `page_navigate` or reload list view
-2. `page_find` with item name — confirm row/card exists
+2. `page_click_query` or `page_find` with item name — confirm row/card exists
 3. `page_screenshot` for evidence
 
 ### Update
 
-1. `page_find` item name → click edit action via `page_click`
-2. `page_type` into changed fields
-3. Submit via `page_click` and verify with `page_text` or `assert_text`
+1. `page_click_query` item name with `preferRegion: "grid-body"` → edit action
+2. `page_type_query` into changed fields
+3. Submit via `page_click_query` and verify with `assert_text` or `page_text`
 
 ### Delete
 
-1. `page_find` item → click delete via `page_click`
-2. Confirm dialog via `page_find` "Confirm" + `page_click`
-3. Verify item absent via `page_find` (expect `ELEMENT_NOT_FOUND`) or `assert_text`
+1. `page_click_query` item → delete action
+2. Confirm dialog via `page_click_query` "Confirm"
+3. Verify item absent via `assert_exists` with `negate: true`, or `page_find` (expect `ELEMENT_NOT_FOUND`)
 
 ### Teardown
 
-- `browser_close` always
-- If `PERSIST_RECORDING=true`, report flushes to Postgres on close
+- `browser_close` always; capture `reportId` when persistence enabled
+- Promote ephemeral sessions with `save_session` before 24h TTL expiry
 
 ## Discovery tips
 
 - Use `page_elements` on unfamiliar list layouts
+- Use `page_click_query` / `page_type_query` for grids (`preferRegion`: `toolbar`, `grid-body`, etc.)
 - Use `page_find` for known button labels ("Delete", "Edit", "Save")
 - After any navigation, rediscover elements — IDs invalidate on `page_navigate`
 
@@ -226,10 +234,10 @@ After create/update/delete, check:
 - `page_network` — verify API returned 2xx
 - `page_console` — ensure no `error` level messages
 
-## Current limitations
+## Assertions
 
-Use `assert_exists`, `assert_text`, `assert_url`, `assert_network`, and `test_run` for structured checks. For manual validation, use:
-- `page_wait` (URL or network idle conditions)
+Use `assert_exists`, `assert_text`, `assert_url`, `assert_network` (`negate`, `soft`), `page_assert_state`, and `test_run` for structured checks. For manual validation:
+- `page_wait` (`element`, `elementHidden`, `url`, `networkIdle`, `networkRequest`)
 - `page_text` / `page_snapshot` for content checks
 - `page_find` (expect `ELEMENT_NOT_FOUND` when item should be gone)
 - `page_network` / `page_console` for API and JS error checks
@@ -248,7 +256,7 @@ This repository ships ready-to-use project skills:
 | `session-record-export` | [`.cursor/skills/session-record-export/SKILL.md`](../../.cursor/skills/session-record-export/SKILL.md) | Record → export → replay with `session_export` and `test_run` |
 | `olteststack-mcp` | [`.cursor/skills/olteststack-mcp/SKILL.md`](../../.cursor/skills/olteststack-mcp/SKILL.md) | General MCP server reference and tool catalog |
 
-All three set `disable-model-invocation: true` — reference them explicitly in chat or via `@` skill attachment.
+All four set `disable-model-invocation: true` — reference them explicitly in chat or via `@` skill attachment.
 
 ## Invoking skills in Cursor
 

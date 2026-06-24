@@ -286,6 +286,12 @@ export const pageScreenshotSchema = {
   properties: {
     pageId: { type: 'string', format: 'uuid' },
     fullPage: { type: 'boolean', default: false },
+    returnInline: {
+      type: 'boolean',
+      default: false,
+      description:
+        'When true and the PNG is under 1MB, also return inline image content in the MCP response.',
+    },
   },
   required: ['pageId'],
   additionalProperties: false,

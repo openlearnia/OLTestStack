@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AppContext } from '../../core/context.js';
+import { screenshotUrlForPath } from '../../core/screenshot-url.js';
 import { createError, success } from '../../core/errors/envelope.js';
 import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/responses.js';
 import { mapCdpError } from '../../cdp/error-mapper.js';
@@ -11,11 +12,13 @@ const screenshotSchema = z
   .object({
     pageId: z.string().uuid(),
     fullPage: z.boolean().optional(),
+    returnInline: z.boolean().optional(),
   })
   .strict();
 
 export interface ScreenshotResult {
   file: string;
+  url?: string;
   width: number;
   height: number;
   fullPage: boolean;
@@ -57,7 +60,11 @@ export async function captureScreenshot(
       });
     }
 
-    return success({ file: filePath, width, height, fullPage });
+    const url = screenshotUrlForPath(filePath, ctx.config);
+    const payload: ScreenshotResult = { file: filePath, width, height, fullPage };
+    if (url) payload.url = url;
+
+    return success(payload);
   } catch (error) {
     const mapped = mapCdpError(error, 'page.screenshot');
     return createError(mapped.code, mapped.message, { ...mapped.details, pageId });
