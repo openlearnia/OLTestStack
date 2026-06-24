@@ -3,6 +3,8 @@ import { createError, success } from '../../core/errors/envelope.js';
 import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/responses.js';
 import { mapCdpError } from '../../cdp/error-mapper.js';
 import { z } from 'zod';
+import type { Element } from '../../core/types/sessions.js';
+import { resolveRecordingQuery } from '../elements/element-query.js';
 import {
   emitActionRecording,
   resolveElement,
@@ -15,6 +17,7 @@ const pressSchema = z
     pageId: z.string().uuid(),
     key: z.string().min(1),
     elementId: z.string().uuid().optional(),
+    query: z.string().min(1).optional(),
   })
   .strict();
 
@@ -35,15 +38,17 @@ export async function pressKey(
     });
   }
 
-  const { pageId, key, elementId } = parsed.data;
+  const { pageId, key, elementId, query } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
   let pressTarget: { nodeId: string; tag?: string } | undefined;
+  let element: Element | undefined;
   if (elementId) {
     const elementResult = await resolveElement(ctx, pageId, elementId);
     if ('error' in elementResult) return elementResult.error;
-    pressTarget = { nodeId: elementResult.element.selector!, tag: elementResult.element.tag };
+    element = elementResult.element;
+    pressTarget = { nodeId: element.selector!, tag: element.tag };
   }
 
   const cdpPage = toCdpPage(pageResult.page);
@@ -58,6 +63,7 @@ export async function pressKey(
       action: 'press',
       key: pressedKey,
       ...(elementId ? { elementId } : {}),
+      ...(element ? { query: resolveRecordingQuery(element, query) } : {}),
     });
 
     return success({ pressed: true as const, key: pressedKey });

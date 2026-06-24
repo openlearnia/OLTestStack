@@ -105,7 +105,7 @@ export async function assertExists(
     }
 
     const best = visibleMatches[0]!;
-    await ctx.registry.registerElement(pageId, best);
+    await ctx.registry.registerElement(pageId, { ...best, discoveredQuery: query });
 
       const message = `Element matching '${query}' exists and is visible`;
       return assertionPass(ctx, page.browserId, pageId, 'exists', message, {

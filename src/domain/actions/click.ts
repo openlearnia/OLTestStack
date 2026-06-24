@@ -3,6 +3,7 @@ import { createError, success } from '../../core/errors/envelope.js';
 import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/responses.js';
 import { mapCdpError } from '../../cdp/error-mapper.js';
 import { z } from 'zod';
+import { resolveRecordingQuery } from '../elements/element-query.js';
 import {
   emitActionRecording,
   resolveElement,
@@ -14,6 +15,7 @@ const clickSchema = z
   .object({
     pageId: z.string().uuid(),
     elementId: z.string().uuid(),
+    query: z.string().min(1).optional(),
   })
   .strict();
 
@@ -34,7 +36,7 @@ export async function clickElement(
     });
   }
 
-  const { pageId, elementId } = parsed.data;
+  const { pageId, elementId, query } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -50,6 +52,7 @@ export async function clickElement(
     emitActionRecording(ctx, pageResult.page.browserId, pageId, {
       action: 'click',
       elementId,
+      query: resolveRecordingQuery(element, query),
     });
 
     return success({ clicked: true as const, elementId });

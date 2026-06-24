@@ -74,6 +74,14 @@ describeWithBrowser('page_type integration', () => {
       expect(emailType.data.value).toBe('user@example.com');
       expect(passwordType.data.value).toBe('secret');
 
+      const events = ctx.recording.getEvents(browserId);
+      const typeEvents = events.filter(
+        (event) => event.type === 'action' && event.payload.action === 'type',
+      );
+      expect(typeEvents).toHaveLength(2);
+      expect(typeEvents[0]?.payload.query).toBe('Email');
+      expect(typeEvents[1]?.payload.query).toBe('Password');
+
       const emailRecheck = await typeIntoElement(ctx, {
         pageId,
         elementId: emailFound.data.element.elementId,

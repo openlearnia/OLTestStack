@@ -3,6 +3,7 @@ import { createError, success } from '../../core/errors/envelope.js';
 import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/responses.js';
 import { mapCdpError } from '../../cdp/error-mapper.js';
 import { z } from 'zod';
+import { resolveRecordingQuery } from '../elements/element-query.js';
 import {
   emitActionRecording,
   resolveElement,
@@ -18,6 +19,7 @@ const typeSchema = z
     pageId: z.string().uuid(),
     elementId: z.string().uuid(),
     value: z.string(),
+    query: z.string().min(1).optional(),
     append: z.boolean().optional(),
     delay: z.number().int().min(0).optional(),
   })
@@ -45,7 +47,7 @@ export async function typeIntoElement(
     });
   }
 
-  const { pageId, elementId, value, append, delay } = parsed.data;
+  const { pageId, elementId, value, query, append, delay } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -74,6 +76,7 @@ export async function typeIntoElement(
       action: 'type',
       elementId,
       value: finalValue,
+      query: resolveRecordingQuery(element, query),
     });
 
     return success({ typed: true as const, elementId, value: finalValue });

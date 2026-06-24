@@ -99,6 +99,12 @@ export const pageClickSchema = {
   properties: {
     pageId: { type: 'string', format: 'uuid' },
     elementId: { type: 'string', format: 'uuid' },
+    query: {
+      type: 'string',
+      minLength: 1,
+      description:
+        'Optional find query for replay recording. Stored on the action event when provided; otherwise inferred from page_find.',
+    },
   },
   required: ['pageId', 'elementId'],
   additionalProperties: false,
@@ -110,6 +116,12 @@ export const pageTypeSchema = {
     pageId: { type: 'string', format: 'uuid' },
     elementId: { type: 'string', format: 'uuid' },
     value: { type: 'string' },
+    query: {
+      type: 'string',
+      minLength: 1,
+      description:
+        'Optional find query for replay recording. Stored on the action event when provided; otherwise inferred from page_find.',
+    },
     append: { type: 'boolean', default: false },
     delay: { type: 'integer', minimum: 0, default: 0 },
   },
@@ -126,6 +138,12 @@ export const pagePressSchema = {
       type: 'string',
       format: 'uuid',
       description: 'Optional element to focus before pressing the key.',
+    },
+    query: {
+      type: 'string',
+      minLength: 1,
+      description:
+        'Optional find query for replay recording when elementId is set. Stored on the action event when provided.',
     },
   },
   required: ['pageId', 'key'],

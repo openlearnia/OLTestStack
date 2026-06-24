@@ -88,6 +88,37 @@ describe('eventsToScript', () => {
     ]);
   });
 
+  test('prefers payload.query over registry lookup', async () => {
+    const pageId = '11111111-1111-4111-8111-111111111111';
+    const elementId = '22222222-2222-4222-8222-222222222222';
+    const elements = new Map<string, Element>([
+      [
+        `${pageId}:${elementId}`,
+        {
+          elementId,
+          role: 'button',
+          text: 'Wrong Label',
+          visible: true,
+        },
+      ],
+    ]);
+
+    const ctx = createTestContext(elements);
+    const events: RecordedEvent[] = [
+      {
+        timestamp: '2026-06-21T10:00:00.000Z',
+        type: 'action',
+        pageId,
+        payload: { action: 'click', elementId, query: 'Sign In' },
+      },
+    ];
+
+    const script = await eventsToScript(ctx, events, { name: 'Recorded flow' });
+
+    expect(script.steps).toEqual([{ action: 'click', query: 'Sign In' }]);
+    expect(script.exportWarnings).toBeUndefined();
+  });
+
   test('warns and skips unresolvable click actions', async () => {
     const pageId = '11111111-1111-4111-8111-111111111111';
     const ctx = createTestContext();

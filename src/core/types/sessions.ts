@@ -23,6 +23,8 @@ export interface Element {
   tag?: string;
   /** Internal CDP node reference — never exposed in MCP responses */
   selector?: string;
+  /** Query from page_find/page_wait — used for replayable recording; never exposed in MCP responses */
+  discoveredQuery?: string;
 }
 
 export type RecordedEventType =
@@ -42,8 +44,8 @@ export interface RecordedEvent {
 }
 
 /** Strip internal fields before MCP serialization */
-export function toPublicElement(element: Element): Omit<Element, 'selector'> {
-  const { selector: _selector, ...publicElement } = element;
+export function toPublicElement(element: Element): Omit<Element, 'selector' | 'discoveredQuery'> {
+  const { selector: _selector, discoveredQuery: _discoveredQuery, ...publicElement } = element;
   return publicElement;
 }
 

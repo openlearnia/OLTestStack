@@ -90,7 +90,7 @@ export async function findElement(
 
     const ranked = rankFindMatches(visibleMatches, query, regionHints);
     const best = ranked[0]!.element;
-    await ctx.registry.registerElement(pageId, best);
+    await ctx.registry.registerElement(pageId, { ...best, discoveredQuery: query });
 
     const publicElements = toPublicElements([best]);
     const result: FindResult = {

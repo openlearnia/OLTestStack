@@ -127,7 +127,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'page_click',
     description:
-      'Click an interactive element by elementId. Scrolls into view and waits for the element to be actionable. Example: { "pageId": "...", "elementId": "..." }.',
+      'Click an interactive element by elementId. Scrolls into view and waits for the element to be actionable. Pass optional query (from page_find) for replayable session_export scripts. Example: { "pageId": "...", "elementId": "...", "query": "Submit" }.',
     inputSchema: pageClickSchema as unknown as Record<string, unknown>,
     handler: (input) => clickElement(ctx, input),
   });
@@ -135,7 +135,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'page_type',
     description:
-      'Type text into an input or textarea element. Clears existing value unless append is true. Example: { "pageId": "...", "elementId": "...", "value": "hello" }.',
+      'Type text into an input or textarea element. Clears existing value unless append is true. Pass optional query (from page_find) for replayable session_export scripts. Example: { "pageId": "...", "elementId": "...", "value": "hello", "query": "Email" }.',
     inputSchema: pageTypeSchema as unknown as Record<string, unknown>,
     handler: (input) => typeIntoElement(ctx, input),
   });

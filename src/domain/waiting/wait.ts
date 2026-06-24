@@ -92,7 +92,7 @@ export async function waitForCondition(
       if (condition === 'element') {
         const matched = await findMatchingElement(ctx, cdpPage, query!);
         if (matched) {
-          await ctx.registry.registerElement(pageId, matched);
+          await ctx.registry.registerElement(pageId, { ...matched, discoveredQuery: query! });
           return success({
             satisfied: true as const,
             condition,

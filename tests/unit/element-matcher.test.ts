@@ -34,9 +34,11 @@ describe('element-matcher', () => {
     expect(filterVisible([sample, hidden], true)).toHaveLength(2);
   });
 
-  test('toPublicElements strips selector', () => {
-    const publicElements = toPublicElements([sample]);
+  test('toPublicElements strips internal fields', () => {
+    const withQuery: Element = { ...sample, discoveredQuery: 'Submit' };
+    const publicElements = toPublicElements([withQuery]);
     expect(publicElements[0]).not.toHaveProperty('selector');
+    expect(publicElements[0]).not.toHaveProperty('discoveredQuery');
     expect(publicElements[0]?.elementId).toBe('el-1');
   });
 

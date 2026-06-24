@@ -36,8 +36,8 @@ export function filterVisible(elements: Element[], includeHidden: boolean): Elem
   return elements.filter((el) => el.visible);
 }
 
-export function toPublicElements(elements: Element[]): Omit<Element, 'selector'>[] {
-  return elements.map(({ selector: _s, ...rest }) => rest);
+export function toPublicElements(elements: Element[]): Omit<Element, 'selector' | 'discoveredQuery'>[] {
+  return elements.map(({ selector: _s, discoveredQuery: _q, ...rest }) => rest);
 }
 
 function regionScore(regionHint?: string): number {

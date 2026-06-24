@@ -429,7 +429,7 @@ When `matchCount > 1`, the best-ranked match is returned (not DOM order). Rankin
 
 ### `page_click`
 
-Click an interactive element by `elementId`. Scrolls into view and waits for the element to be actionable.
+Click an interactive element by `elementId`. Scrolls into view and waits for the element to be actionable. When recording is enabled, the optional `query` field (or the query from a prior `page_find`) is stored on the action event for `session_export` replay scripts.
 
 **Input schema**
 
@@ -437,6 +437,7 @@ Click an interactive element by `elementId`. Scrolls into view and waits for the
 |-------|------|----------|
 | `pageId` | string (UUID) | yes |
 | `elementId` | string (UUID) | yes |
+| `query` | string | no — recommended after `page_find` for replayable exports |
 
 **Example input**
 
@@ -475,7 +476,7 @@ Click an interactive element by `elementId`. Scrolls into view and waits for the
 
 ### `page_type`
 
-Type text into an input or textarea element. Clears existing value unless `append` is true.
+Type text into an input or textarea element. Clears existing value unless `append` is true. When recording is enabled, the optional `query` field (or the query from a prior `page_find`) is stored on the action event for `session_export` replay scripts.
 
 **Input schema**
 
@@ -484,6 +485,7 @@ Type text into an input or textarea element. Clears existing value unless `appen
 | `pageId` | string (UUID) | yes | — | Target page |
 | `elementId` | string (UUID) | yes | — | Typeable element from discovery |
 | `value` | string | yes | — | Text to type |
+| `query` | string | no | — | Find query for replayable exports (recommended) |
 | `append` | boolean | no | `false` | Append instead of replace |
 | `delay` | integer (≥0) | no | `0` | Per-keystroke delay in ms |
 

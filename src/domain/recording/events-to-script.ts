@@ -1,13 +1,8 @@
 import type { AppContext } from '../../core/context.js';
-import type { Element, RecordedEvent } from '../../core/types/sessions.js';
+import type { RecordedEvent } from '../../core/types/sessions.js';
+import { elementToQuery } from '../elements/element-query.js';
 import type { TestStep } from '../test/step-types.js';
 import { SESSION_SCRIPT_VERSION, type SessionScript } from './script-types.js';
-
-function elementToQuery(element: Element): string {
-  const text = element.text.trim();
-  if (text.length > 0) return text;
-  return element.role;
-}
 
 async function resolveQueryFromElementId(
   ctx: AppContext,
@@ -17,6 +12,9 @@ async function resolveQueryFromElementId(
   if (typeof elementId !== 'string' || !pageId) return undefined;
   const element = await ctx.registry.getElement(pageId, elementId);
   if (!element) return undefined;
+  if (typeof element.discoveredQuery === 'string' && element.discoveredQuery.length > 0) {
+    return element.discoveredQuery;
+  }
   return elementToQuery(element);
 }
 
