@@ -60,6 +60,17 @@ export interface ElementTargetOptions {
   tag?: string;
 }
 
+export interface SelectOptionOptions extends ElementTargetOptions {
+  by: 'value' | 'label';
+  value?: string;
+  label?: string;
+  match?: 'equals' | 'contains';
+}
+
+export interface UploadFilesOptions extends ElementTargetOptions {
+  clear?: boolean;
+}
+
 export interface MonitoringHooks {
   onNetworkError?: (entry: NetworkEntry) => void;
   onConsoleError?: (entry: ConsoleEntry) => void;
@@ -118,6 +129,14 @@ export interface CdpAdapter {
     amount?: number,
     options?: ElementTargetOptions & { nodeId?: string },
   ): Promise<ScrollResult>;
+
+  selectOption(page: CdpPage, nodeId: string, options: SelectOptionOptions): Promise<string>;
+  uploadFiles(
+    page: CdpPage,
+    nodeId: string,
+    filePaths: string[],
+    options?: UploadFilesOptions,
+  ): Promise<string[]>;
 
   captureScreenshot(page: CdpPage, fullPage?: boolean): Promise<ScreenshotCapture>;
   getDomStats(page: CdpPage): Promise<DOMStats>;

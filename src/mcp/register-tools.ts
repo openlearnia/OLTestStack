@@ -6,6 +6,8 @@ import { clickElement } from '../domain/actions/click.js';
 import { typeByQuery } from '../domain/actions/type-query.js';
 import { pressKey } from '../domain/actions/press.js';
 import { scrollPage } from '../domain/actions/scroll.js';
+import { selectOption } from '../domain/actions/select.js';
+import { uploadFiles } from '../domain/actions/upload.js';
 import { typeIntoElement } from '../domain/actions/type.js';
 import { findElement } from '../domain/elements/find-element.js';
 import { listElements } from '../domain/elements/list-elements.js';
@@ -27,6 +29,8 @@ import { runTest } from '../domain/test/run-test.js';
 import { sendReport } from '../domain/debug/send-report.js';
 import { exportSession } from '../domain/recording/session-export.js';
 import { getPersistedSession } from '../domain/recording/session-get.js';
+import { listPersistedSessions } from '../domain/recording/session-list.js';
+import { lintScript } from '../domain/recording/script-lint.js';
 import { getSessionStatus } from '../domain/recording/session-status.js';
 import { saveSession } from '../domain/recording/save-session.js';
 import { waitForCondition } from '../domain/waiting/wait.js';
@@ -56,9 +60,13 @@ import {
   pageTextSchema,
   pageTypeSchema,
   pageTypeQuerySchema,
+  pageSelectSchema,
+  pageUploadSchema,
   pageWaitSchema,
   sessionStatusSchema,
   sessionGetSchema,
+  sessionListSchema,
+  scriptLintSchema,
   sessionExportSchema,
   saveSessionSchema,
   sendReportSchema,
@@ -162,6 +170,22 @@ export function registerTools(ctx: AppContext): ToolRegistry {
       'Find and type into an element atomically by text query. Records the query for replay. Supports preferRegion, preferRole, and candidateIndex for disambiguation. Example: { "pageId": "...", "query": "Email", "value": "user@example.com" }.',
     inputSchema: pageTypeQuerySchema as unknown as Record<string, unknown>,
     handler: (input) => typeByQuery(ctx, input),
+  });
+
+  registry.register({
+    name: 'page_select',
+    description:
+      'Select an option on a native select or combobox by elementId or query. Match by value or label; records query for replay. Example: { "pageId": "...", "query": "Country", "label": "United States", "by": "label" }.',
+    inputSchema: pageSelectSchema as unknown as Record<string, unknown>,
+    handler: (input) => selectOption(ctx, input),
+  });
+
+  registry.register({
+    name: 'page_upload',
+    description:
+      'Set files on an input[type=file] via server-local paths (restricted to UPLOAD_DIR). Example: { "pageId": "...", "query": "Resume", "files": ["uploads/resume.pdf"] }.',
+    inputSchema: pageUploadSchema as unknown as Record<string, unknown>,
+    handler: (input) => uploadFiles(ctx, input),
   });
 
   registry.register({
@@ -285,6 +309,14 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
+    name: 'session_list',
+    description:
+      'List persisted sessions with pagination and filters (status, search, persistence). Wraps dashboard list query. Requires DATABASE_URL. Example: { "page": 1, "limit": 20, "status": "passed", "persistence": "saved" }.',
+    inputSchema: sessionListSchema as unknown as Record<string, unknown>,
+    handler: (input) => listPersistedSessions(ctx, input),
+  });
+
+  registry.register({
     name: 'session_export',
     description:
       'Export a browser session recording as a replayable .olteststack.json script. Pass browserId while the session is open, or reportId/sessionId after browser_close to rebuild from PostgreSQL recorded_events. Example: { "browserId": "...", "name": "Login flow" } or { "reportId": "550e8400-e29b-41d4-a716-446655440000" }.',
@@ -309,9 +341,17 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
+    name: 'script_lint',
+    description:
+      'Validate a replay script without launching a browser. Accepts inline script or scriptFile. Example: { "scriptFile": "scripts/example-login.olteststack.json" }.',
+    inputSchema: scriptLintSchema as unknown as Record<string, unknown>,
+    handler: (input) => lintScript(ctx, input),
+  });
+
+  registry.register({
     name: 'test_run',
     description:
-      'Execute a complete browser test with explicit steps and return a structured TestReport. Provide goal plus steps, script, or scriptFile; goal-only returns agent-driven guidance. Example: { "goal": "Login flow", "url": "https://app.example.com/login", "steps": [...] } or { "goal": "Replay login", "scriptFile": "scripts/example-login.olteststack.json" }.',
+      'Execute a complete browser test with explicit steps and return a structured TestReport. Provide goal plus steps, script, scriptFile, scripts suite, or suiteFile; goal-only returns agent-driven guidance. Example: { "goal": "Login flow", "url": "https://app.example.com/login", "steps": [...] } or { "goal": "Replay suite", "suiteFile": "scripts/login-suite.json" }.',
     inputSchema: testRunSchema as unknown as Record<string, unknown>,
     handler: (input) => runTest(ctx, input),
   });

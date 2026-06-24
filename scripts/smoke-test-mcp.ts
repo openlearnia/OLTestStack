@@ -18,7 +18,7 @@ import type { Subprocess } from 'bun';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const EXPECTED_TOOL_COUNT = 26;
+const EXPECTED_TOOL_COUNT = 35;
 const CHROME_CANDIDATES = [
   process.env.CHROMIUM_EXECUTABLE_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',

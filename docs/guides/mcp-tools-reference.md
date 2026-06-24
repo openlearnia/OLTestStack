@@ -28,10 +28,9 @@ Complete reference for OLTestStack MCP tools. All tools return a JSON envelope a
 
 | Status | Count | Tools |
 |--------|-------|-------|
-| **Implemented** | 31 | V1 (27) + v1.3 Wave 1: `page_click_query`, `page_type_query`, `session_status`, `session_get`; extensions on `page_wait`, `assert_*`, `browser_close` |
-| **Deferred (Wave 1.5)** | 3 | `page_select`, `page_upload`, `session_list` |
+| **Implemented** | 35 | V1 (27) + v1.3 Wave 1 (4) + Wave 1.5 (3) + `script_lint`; extensions on `page_wait`, `assert_*`, `browser_close`, `test_run` suite |
 | **Planned (Wave 2)** | 2 | `page_frame`, `page_cookies` |
-| **Total (v1.3 target)** | ~33 | See [tool-expansion-v1.3.md](../plans/tool-expansion-v1.3.md) |
+| **Total (v1.3 target)** | ~33–35 | See [tool-expansion-v1.3.md](../plans/tool-expansion-v1.3.md) |
 
 ---
 
@@ -578,6 +577,96 @@ Find and type into an element atomically by text query. Same disambiguation para
 | `candidateIndex` | integer (≥0) | no | Nth match |
 | `append` | boolean | no | Append mode |
 | `delay` | integer | no | Keystroke delay ms |
+
+---
+
+### `page_select`
+
+Select an option on a native `<select>` or ARIA combobox/listbox. Target by `elementId` or `query`; match by `value` or `label`. Records query for `session_export` replay.
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `elementId` | string (UUID) | one of* | Known element id |
+| `query` | string | one of* | Find text for select/combobox |
+| `value` | string | one of** | Option `value` attribute |
+| `label` | string | one of** | Visible option label |
+| `by` | `"value"` \| `"label"` | no | Match mode (inferred from value/label) |
+| `match` | `"equals"` \| `"contains"` | no | Label match mode (default `equals`) |
+| `preferRegion` / `preferRole` / `candidateIndex` | — | no | Same disambiguation as `page_click_query` |
+
+\* Provide `elementId` or `query`, not both.  
+\** Provide `value` or `label`.
+
+**Example input**
+
+```json
+{
+  "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "query": "Country",
+  "label": "United States",
+  "by": "label"
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "selected": true,
+    "elementId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "value": "us",
+    "query": "Country",
+    "matchCount": 1
+  }
+}
+```
+
+---
+
+### `page_upload`
+
+Set files on `<input type="file">` via server-local paths. Paths must resolve under `UPLOAD_DIR` (default `./uploads`).
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `elementId` | string (UUID) | one of* | Known file input |
+| `query` | string | one of* | Find label for file input |
+| `files` | string[] | yes | Server-local file paths |
+| `clear` | boolean | no | Clear existing selection first |
+
+**Example input**
+
+```json
+{
+  "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "query": "Resume",
+  "files": ["uploads/resume.pdf"]
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uploaded": true,
+    "elementId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "files": ["uploads/resume.pdf"],
+    "query": "Resume"
+  }
+}
+```
+
+**Error cases:** `INVALID_INPUT` for paths outside `UPLOAD_DIR` or non-file inputs; `ELEMENT_NOT_FOUND` for stale targets.
 
 ---
 
@@ -1251,6 +1340,47 @@ Fetch a persisted session by `reportId` or `sessionId`. Returns report metadata 
 
 ---
 
+### `session_list`
+
+Paginated list of persisted sessions. Wraps dashboard `listSessions` query. Requires `DATABASE_URL`.
+
+**Input schema**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `page` | integer (≥1) | no | `1` | Page number |
+| `limit` | integer (1–100) | no | `20` | Page size |
+| `status` | `"passed"` \| `"failed"` \| `"error"` | no | — | Filter by report status |
+| `search` | string | no | — | Substring match on test name |
+| `persistence` | `"all"` \| `"saved"` \| `"expiring"` | no | — | Saved vs TTL sessions |
+
+**Example input**
+
+```json
+{
+  "page": 1,
+  "limit": 10,
+  "status": "passed",
+  "persistence": "saved",
+  "search": "login"
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "sessions": [],
+    "pagination": { "page": 1, "limit": 10, "total": 0, "totalPages": 0 },
+    "dbAvailable": true
+  }
+}
+```
+
+---
+
 ### `session_export`
 
 Export a browser session recording as a replayable `.olteststack.json` script.
@@ -1428,9 +1558,37 @@ Dump full in-memory browser session state as a structured debug report. Generate
 
 ---
 
+### `script_lint`
+
+Validate a replay script without launching a browser. Accepts inline `script` or `scriptFile`.
+
+**Example input**
+
+```json
+{
+  "scriptFile": "scripts/example-login.olteststack.json"
+}
+```
+
+**Example output (valid)**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "valid": true,
+    "stepCount": 5,
+    "issues": [],
+    "script": { "version": "1.0", "name": "Example login flow", "steps": [] }
+  }
+}
+```
+
+---
+
 ### `test_run`
 
-Execute a complete browser test with explicit steps, an inline script, or a script file — then return a structured `TestReport`. Launches browser, runs steps, generates report, and closes browser. Goal-only (no steps/script/scriptFile) returns agent-driven guidance.
+Execute a complete browser test with explicit steps, an inline script, script file, or **suite** (`scripts[]` / `suiteFile`) — then return a structured `TestReport` or suite summary. Launches browser, runs steps, generates report, and closes browser. Goal-only (no steps/script) returns agent-driven guidance.
 
 **Input schema**
 
@@ -1442,6 +1600,8 @@ Execute a complete browser test with explicit steps, an inline script, or a scri
 | `steps` | array | no | — | Explicit step sequence |
 | `script` | object | no | — | Inline `.olteststack.json` replay script |
 | `scriptFile` | string | no | — | Path to script file on MCP server host |
+| `scripts` | array | no | — | Inline suite of scripts (run sequentially) |
+| `suiteFile` | string | no | — | Path to suite JSON (`{ "scripts": [...] }` or script array) |
 | `variables` | object (string → string) | no | — | Values for `${VAR_NAME}` placeholders in steps and `url` |
 | `headless` | boolean | no | `true` | Browser headless mode |
 | `stopOnFailure` | boolean | no | `true` | Halt on first step failure |

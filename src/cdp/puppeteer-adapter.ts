@@ -19,6 +19,8 @@ import {
   type ScrollDirection,
   type TypeOptions,
   type ElementTargetOptions,
+  type SelectOptionOptions,
+  type UploadFilesOptions,
   type MonitoringHooks,
 } from './adapter.js';
 import { PageMonitoringBuffer } from './page-monitoring.js';
@@ -495,6 +497,146 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }
 
     return { direction, amount: scrollAmount };
+  }
+
+  async selectOption(
+    page: CdpPage,
+    nodeId: string,
+    options: SelectOptionOptions,
+  ): Promise<string> {
+    const handle = await this.requireElementHandle(page, nodeId, options.tag);
+    const pageEntry = this.getPageEntry(page);
+
+    try {
+      await handle.evaluate((el) => {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+      });
+
+      const tagName = await handle.evaluate((el) => el.tagName.toLowerCase());
+
+      if (tagName === 'select') {
+        if (options.by === 'value' && options.value !== undefined) {
+          await handle.select(options.value);
+          return await readElementValue(handle);
+        }
+
+        if (options.label !== undefined) {
+          const selectedValue = await handle.evaluate(
+            (el, lbl, matchMode) => {
+              const select = el as HTMLSelectElement;
+              for (const opt of Array.from(select.options)) {
+                const text = opt.text.trim();
+                const matches =
+                  matchMode === 'contains' ? text.includes(lbl) : text === lbl;
+                if (matches) {
+                  select.value = opt.value;
+                  select.dispatchEvent(new Event('input', { bubbles: true }));
+                  select.dispatchEvent(new Event('change', { bubbles: true }));
+                  return opt.value;
+                }
+              }
+              throw new Error(`No option matching label '${lbl}'`);
+            },
+            options.label,
+            options.match ?? 'equals',
+          );
+          return selectedValue;
+        }
+
+        throw new CdpError(
+          'Select by value requires a value',
+          'Missing value',
+          'selectOption',
+          true,
+        );
+      }
+
+      await handle.click({ delay: CLICK_DELAY_MS });
+      const searchText = options.by === 'value' ? options.value : options.label;
+      if (searchText === undefined) {
+        throw new CdpError(
+          'Select requires value or label',
+          'Missing selection target',
+          'selectOption',
+          true,
+        );
+      }
+
+      const selected = await pageEntry.evaluate(
+        ({ text, matchMode }) => {
+          const candidates = Array.from(
+            document.querySelectorAll('[role="option"], option, li[data-value]'),
+          );
+          for (const node of candidates) {
+            const htmlEl = node as HTMLElement;
+            const style = window.getComputedStyle(htmlEl);
+            if (style.display === 'none' || style.visibility === 'hidden') continue;
+            const label = htmlEl.innerText?.trim() ?? htmlEl.textContent?.trim() ?? '';
+            const matches =
+              matchMode === 'contains' ? label.includes(text) : label === text;
+            if (matches) {
+              htmlEl.click();
+              return label;
+            }
+          }
+          throw new Error(`No option matching '${text}'`);
+        },
+        { text: searchText, matchMode: options.match ?? 'equals' },
+      );
+
+      return selected;
+    } catch (error) {
+      if (error instanceof CdpError) throw error;
+      throw new CdpError(
+        'Failed to select option',
+        error instanceof Error ? error.message : String(error),
+        'selectOption',
+        true,
+      );
+    }
+  }
+
+  async uploadFiles(
+    page: CdpPage,
+    nodeId: string,
+    filePaths: string[],
+    options: UploadFilesOptions = {},
+  ): Promise<string[]> {
+    const handle = await this.requireElementHandle(page, nodeId, options.tag);
+
+    try {
+      const isFileInput = await handle.evaluate(
+        (el) => el instanceof HTMLInputElement && el.type === 'file',
+      );
+      if (!isFileInput) {
+        throw new CdpError(
+          'Element is not a file input',
+          'Expected input[type=file]',
+          'uploadFiles',
+          true,
+        );
+      }
+
+      if (options.clear) {
+        await handle.evaluate((el) => {
+          const input = el as HTMLInputElement;
+          input.value = '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+
+      await (handle as ElementHandle<HTMLInputElement>).uploadFile(...filePaths);
+      return filePaths;
+    } catch (error) {
+      if (error instanceof CdpError) throw error;
+      throw new CdpError(
+        'Failed to upload files',
+        error instanceof Error ? error.message : String(error),
+        'uploadFiles',
+        true,
+      );
+    }
   }
 
   async captureScreenshot(page: CdpPage, fullPage = false): Promise<{ buffer: Buffer; width: number; height: number }> {

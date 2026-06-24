@@ -35,6 +35,6 @@ Configure the MCP server in [`.cursor/mcp.json`](../../.cursor/mcp.json) (see [M
 
 ## Current status (V1)
 
-**27 MCP tools** are implemented — browser lifecycle, pages, elements, actions, inspection, monitoring, waiting, assertions, session export/save, debug reports, and scripted `test_run`.
+**35 MCP tools** are implemented — browser lifecycle, pages, elements, actions (including `page_select` / `page_upload`), inspection, monitoring, waiting, assertions, session introspection/list/export/save, `script_lint`, debug reports, and scripted `test_run` (including suites).
 
 Start with [MCP Server Setup](./mcp-server-setup.md), then [Agent Workflows](./agent-workflows.md) for end-to-end test patterns.

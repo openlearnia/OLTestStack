@@ -6,6 +6,8 @@ export interface FrameworkConfig {
   defaultNavigationTimeoutMs?: number;
   defaultWaitTimeoutMs?: number;
   screenshotDir?: string;
+  /** Server-local directory allowed for page_upload file paths. */
+  uploadDir?: string;
   chromiumExecutablePath?: string;
   databaseUrl?: string;
   persistRecording?: boolean;
@@ -27,6 +29,7 @@ export interface ResolvedConfig {
   defaultNavigationTimeoutMs: number;
   defaultWaitTimeoutMs: number;
   screenshotDir: string;
+  uploadDir: string;
   chromiumExecutablePath?: string;
   /** PostgreSQL connection string (host port defaults to 5433 in .env.example). */
   databaseUrl?: string;
@@ -62,6 +65,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   defaultNavigationTimeoutMs: 30_000,
   defaultWaitTimeoutMs: 30_000,
   screenshotDir: './screenshots',
+  uploadDir: './uploads',
   persistRecording: false,
   sessionTtlHours: DEFAULT_SESSION_TTL_HOURS,
   autoSaveFailedSessions: false,
@@ -118,6 +122,7 @@ export function loadConfig(fileConfig: FrameworkConfig = {}): ResolvedConfig {
       envWaitTimeout ?? fileConfig.defaultWaitTimeoutMs ?? DEFAULT_CONFIG.defaultWaitTimeoutMs,
     screenshotDir:
       process.env.SCREENSHOT_DIR ?? fileConfig.screenshotDir ?? DEFAULT_CONFIG.screenshotDir,
+    uploadDir: process.env.UPLOAD_DIR ?? fileConfig.uploadDir ?? DEFAULT_CONFIG.uploadDir,
     chromiumExecutablePath:
       process.env.CHROMIUM_EXECUTABLE_PATH ?? fileConfig.chromiumExecutablePath,
     databaseUrl: process.env.DATABASE_URL ?? fileConfig.databaseUrl,

@@ -122,19 +122,20 @@ Add to your Cursor MCP settings (`.cursor/mcp.json` or Cursor Settings → MCP):
 
 Replace `cwd` with the absolute path to this project on your machine. Set `DATABASE_URL` for Postgres persistence (default on when set). Use `PERSIST_RECORDING=false` to disable writes.
 
-## Available tools (V1 — 26)
+## Available tools (V1.3 — 35)
 
 | Category | Tools |
 |----------|-------|
 | Browser | `browser_launch`, `browser_close` |
 | Page | `page_create`, `page_navigate`, `page_reload`, `page_close` |
 | Elements | `page_elements`, `page_find` |
-| Actions | `page_click`, `page_type`, `page_press`, `page_scroll` |
+| Actions | `page_click`, `page_click_query`, `page_type`, `page_type_query`, `page_select`, `page_upload`, `page_press`, `page_scroll` |
 | Inspection | `page_screenshot`, `page_snapshot`, `page_text`, `page_html` |
 | Monitoring | `page_network`, `page_console` |
 | Waiting | `page_wait` |
 | Assertions | `assert_exists`, `assert_text`, `assert_url`, `assert_network` |
-| Session | `session_export`, `save_session`, `test_run` |
+| Session | `session_status`, `session_get`, `session_list`, `session_export`, `save_session`, `script_lint`, `test_run` |
+| Debug | `send_report` |
 
 ## Example flow
 
@@ -151,6 +152,7 @@ browser_launch  →  page_create  →  page_navigate  →  page_find  →  page_
 | `DEFAULT_TIMEOUT_MS` | `30000` | General operation timeout |
 | `DEFAULT_NAVIGATION_TIMEOUT_MS` | `30000` | Navigation/reload timeout |
 | `SCREENSHOT_DIR` | `./screenshots` | Screenshot output directory |
+| `UPLOAD_DIR` | `./uploads` | Allowed server-local paths for `page_upload` |
 | `DATABASE_URL` | — | PostgreSQL connection string (`localhost:5433` in dev) |
 | `PERSIST_RECORDING` | `true` when `DATABASE_URL` set | Set `false` to opt out of persisting reports |
 | `SESSION_TTL_HOURS` | `24` | Hours until unsaved sessions are auto-deleted |

@@ -24,3 +24,34 @@ export function loadSessionScriptFromFile(scriptFile: string): SessionScript {
   const parsed = JSON.parse(raw) as unknown;
   return sessionScriptSchema.parse(parsed);
 }
+
+export const testSuiteSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    scripts: z.array(sessionScriptSchema).min(1),
+  })
+  .strict();
+
+export type TestSuite = z.infer<typeof testSuiteSchema>;
+
+export function loadTestSuiteFromFile(suiteFile: string): TestSuite {
+  const absolutePath = resolve(suiteFile);
+  const raw = readFileSync(absolutePath, 'utf8');
+  const parsed = JSON.parse(raw) as unknown;
+
+  if (Array.isArray(parsed)) {
+    return testSuiteSchema.parse({ scripts: parsed });
+  }
+
+  const asSuite = testSuiteSchema.safeParse(parsed);
+  if (asSuite.success) {
+    return asSuite.data;
+  }
+
+  const asScript = sessionScriptSchema.safeParse(parsed);
+  if (asScript.success) {
+    return { scripts: [asScript.data] };
+  }
+
+  return testSuiteSchema.parse(parsed);
+}

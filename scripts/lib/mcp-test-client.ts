@@ -9,7 +9,7 @@ import type { Subprocess } from 'bun';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-export const EXPECTED_TOOL_COUNT = 25;
+export const EXPECTED_TOOL_COUNT = 35;
 
 const CHROME_CANDIDATES = [
   process.env.CHROMIUM_EXECUTABLE_PATH,

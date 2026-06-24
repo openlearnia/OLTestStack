@@ -172,6 +172,78 @@ export const pageTypeSchema = {
   additionalProperties: false,
 } as const;
 
+export const pageSelectSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    elementId: { type: 'string', format: 'uuid' },
+    query: { type: 'string', minLength: 1 },
+    preferRegion: findDisambiguationProperties.preferRegion,
+    preferRole: findDisambiguationProperties.preferRole,
+    candidateIndex: findDisambiguationProperties.candidateIndex,
+    value: { type: 'string', description: 'Option value attribute (when by is value)' },
+    label: { type: 'string', description: 'Visible option label (when by is label)' },
+    by: { type: 'string', enum: ['value', 'label'], description: 'Match by value or label (default inferred)' },
+    match: {
+      type: 'string',
+      enum: ['equals', 'contains'],
+      default: 'equals',
+      description: 'Label match mode',
+    },
+  },
+  required: ['pageId'],
+  additionalProperties: false,
+} as const;
+
+export const pageUploadSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    elementId: { type: 'string', format: 'uuid' },
+    query: { type: 'string', minLength: 1 },
+    preferRegion: findDisambiguationProperties.preferRegion,
+    preferRole: findDisambiguationProperties.preferRole,
+    candidateIndex: findDisambiguationProperties.candidateIndex,
+    files: {
+      type: 'array',
+      items: { type: 'string', minLength: 1 },
+      minItems: 1,
+      description: 'Server-local file paths under UPLOAD_DIR',
+    },
+    clear: { type: 'boolean', default: false, description: 'Clear existing file selection first' },
+  },
+  required: ['pageId', 'files'],
+  additionalProperties: false,
+} as const;
+
+export const sessionListSchema = {
+  type: 'object',
+  properties: {
+    page: { type: 'integer', minimum: 1, default: 1 },
+    limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    status: { type: 'string', enum: ['passed', 'failed', 'error'] },
+    search: { type: 'string', minLength: 1, description: 'Filter by test name substring' },
+    persistence: { type: 'string', enum: ['all', 'saved', 'expiring'] },
+  },
+  additionalProperties: false,
+} as const;
+
+export const scriptLintSchema = {
+  type: 'object',
+  properties: {
+    script: {
+      type: 'object',
+      description: 'Inline .olteststack.json script object (validated at lint time)',
+      additionalProperties: true,
+    },
+    scriptFile: {
+      type: 'string',
+      description: 'Path to a .olteststack.json file on the MCP server filesystem',
+    },
+  },
+  additionalProperties: false,
+} as const;
+
 export const pagePressSchema = {
   type: 'object',
   properties: {
@@ -512,6 +584,26 @@ export const testRunSchema = {
     scriptFile: {
       type: 'string',
       description: 'Path to a .olteststack.json replay script on the MCP server filesystem.',
+    },
+    scripts: {
+      type: 'array',
+      description: 'Inline suite of replay scripts executed sequentially.',
+      items: {
+        type: 'object',
+        properties: {
+          version: { type: 'string', enum: ['1.0'] },
+          name: { type: 'string' },
+          goal: { type: 'string' },
+          url: { type: 'string' },
+          steps: { type: 'array' },
+        },
+        required: ['version', 'name', 'steps'],
+      },
+      minItems: 1,
+    },
+    suiteFile: {
+      type: 'string',
+      description: 'Path to a JSON suite file ({ scripts: [...] } or array of scripts).',
     },
     variables: {
       type: 'object',
