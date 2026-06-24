@@ -13,6 +13,9 @@ export interface PageSession {
   url: string;
   title: string;
   createdAt: string;
+  /** Active iframe index (0 = main). Undefined when on main frame. */
+  activeFrameIndex?: number;
+  activeFrameUrl?: string;
 }
 
 export interface Element {

@@ -1,6 +1,6 @@
 import type { AppContext } from '../../core/context.js';
 import { isErrorResponse } from '../../core/errors/envelope.js';
-import type { McpErrorResponse } from '../../core/types/responses.js';
+import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/responses.js';
 import { assertExists } from '../assertions/exists.js';
 import { assertNetwork } from '../assertions/network.js';
 import { assertText } from '../assertions/text.js';
@@ -14,6 +14,49 @@ import { captureScreenshot } from '../inspection/screenshot.js';
 import { navigatePage } from '../page/navigate-page.js';
 import { waitForCondition } from '../waiting/wait.js';
 import type { StepExecutionResult, TestStep } from './step-types.js';
+
+function isSoftAssertSuccess(result: { ok: boolean; data?: unknown }): boolean {
+  return (
+    result.ok === true &&
+    typeof result.data === 'object' &&
+    result.data !== null &&
+    'passed' in result.data &&
+    (result.data as { passed?: boolean }).passed === false &&
+    'soft' in result.data &&
+    (result.data as { soft?: boolean }).soft === true
+  );
+}
+
+async function handleAssertStepResult(
+  result: McpSuccessResponse<unknown> | McpErrorResponse,
+  captureOnPass: () => Promise<unknown>,
+): Promise<StepExecutionResult> {
+  if (isErrorResponse(result)) {
+    const assertionFailure = result.error.code === 'ASSERTION_FAILED';
+    if (assertionFailure) {
+      await captureOnPass();
+    }
+    return {
+      success: false,
+      failed: true,
+      assertionFailure,
+      message: result.error.message,
+    };
+  }
+
+  if (isSoftAssertSuccess(result)) {
+    return {
+      success: true,
+      failed: false,
+      assertionFailure: false,
+      softFailure: true,
+      message: String((result.data as { message?: string }).message ?? 'Soft assertion failed'),
+    };
+  }
+
+  await captureOnPass();
+  return { success: true, failed: false, assertionFailure: false };
+}
 
 async function resolveElementId(
   ctx: AppContext,
@@ -121,17 +164,8 @@ export async function executeStep(
     }
 
     case 'assert.exists': {
-      const result = await assertExists(ctx, { pageId, query: step.query });
-      if (isErrorResponse(result)) {
-        return {
-          success: false,
-          failed: true,
-          assertionFailure: result.error.code === 'ASSERTION_FAILED',
-          message: result.error.message,
-        };
-      }
-      await captureScreenshot(ctx, { pageId });
-      return { success: true, failed: false, assertionFailure: false };
+      const result = await assertExists(ctx, { pageId, query: step.query, soft: step.soft });
+      return handleAssertStepResult(result, () => captureScreenshot(ctx, { pageId }));
     }
 
     case 'assert.text': {
@@ -139,39 +173,19 @@ export async function executeStep(
         pageId,
         contains: step.contains,
         match: step.match,
+        soft: step.soft,
       });
-      if (isErrorResponse(result)) {
-        const assertionFailure = result.error.code === 'ASSERTION_FAILED';
-        if (assertionFailure) {
-          await captureScreenshot(ctx, { pageId });
-        }
-        return {
-          success: false,
-          failed: true,
-          assertionFailure,
-          message: result.error.message,
-        };
-      }
-      await captureScreenshot(ctx, { pageId });
-      return { success: true, failed: false, assertionFailure: false };
+      return handleAssertStepResult(result, () => captureScreenshot(ctx, { pageId }));
     }
 
     case 'assert.url': {
-      const result = await assertUrl(ctx, { pageId, url: step.url, match: step.match });
-      if (isErrorResponse(result)) {
-        const assertionFailure = result.error.code === 'ASSERTION_FAILED';
-        if (assertionFailure) {
-          await captureScreenshot(ctx, { pageId });
-        }
-        return {
-          success: false,
-          failed: true,
-          assertionFailure,
-          message: result.error.message,
-        };
-      }
-      await captureScreenshot(ctx, { pageId });
-      return { success: true, failed: false, assertionFailure: false };
+      const result = await assertUrl(ctx, {
+        pageId,
+        url: step.url,
+        match: step.match,
+        soft: step.soft,
+      });
+      return handleAssertStepResult(result, () => captureScreenshot(ctx, { pageId }));
     }
 
     case 'assert.network': {
@@ -179,21 +193,9 @@ export async function executeStep(
         pageId,
         url: step.url,
         status: step.status,
+        soft: step.soft,
       });
-      if (isErrorResponse(result)) {
-        const assertionFailure = result.error.code === 'ASSERTION_FAILED';
-        if (assertionFailure) {
-          await captureScreenshot(ctx, { pageId });
-        }
-        return {
-          success: false,
-          failed: true,
-          assertionFailure,
-          message: result.error.message,
-        };
-      }
-      await captureScreenshot(ctx, { pageId });
-      return { success: true, failed: false, assertionFailure: false };
+      return handleAssertStepResult(result, () => captureScreenshot(ctx, { pageId }));
     }
 
     default:

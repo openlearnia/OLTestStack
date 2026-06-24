@@ -12,6 +12,9 @@ import {
   listSessions,
   parseSessionsQueryParams,
 } from './queries.js';
+import { compareSessions } from './compare-sessions.js';
+import { exportSessionFromDatabase } from '../domain/recording/export-from-db.js';
+import type { AppContext } from '../core/context.js';
 
 const PUBLIC_DIR = join(import.meta.dir, 'public');
 
@@ -124,7 +127,11 @@ async function handleSaveSession(
   return jsonResponse(result);
 }
 
-async function handleApiSessions(config: ResolvedConfig, request: Request): Promise<Response> {
+async function handleApiSessions(
+  config: ResolvedConfig,
+  request: Request,
+  ctx?: AppContext,
+): Promise<Response> {
   const url = new URL(request.url);
 
   if (!config.databaseUrl) {
@@ -149,6 +156,45 @@ async function handleApiSessions(config: ResolvedConfig, request: Request): Prom
       return new Response('Method Not Allowed', { status: 405 });
     }
     return handleSaveSession(config, saveMatch[1], request);
+  }
+
+  const exportMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/export$/);
+  if (exportMatch) {
+    if (!ctx) {
+      return jsonResponse({ error: 'Server context unavailable' }, 500);
+    }
+    const reportId = exportMatch[1];
+    if (!isValidUuid(reportId)) {
+      return jsonResponse({ error: 'Invalid session id' }, 400);
+    }
+    const exportUrl = new URL(request.url);
+    const name = exportUrl.searchParams.get('name') ?? undefined;
+    const goal = exportUrl.searchParams.get('goal') ?? undefined;
+    const result = await exportSessionFromDatabase(ctx, reportId, { name, goal });
+    if (!result.ok) {
+      const status = result.error.code === 'SESSION_NOT_FOUND' ? 404 : 400;
+      return jsonResponse({ error: result.error.message, code: result.error.code }, status);
+    }
+    return jsonResponse(result.data);
+  }
+
+  if (url.pathname === '/api/sessions/compare') {
+    if (!ctx) {
+      return jsonResponse({ error: 'Server context unavailable' }, 500);
+    }
+    const baseline = url.searchParams.get('baseline');
+    const candidate = url.searchParams.get('candidate');
+    if (!baseline || !candidate) {
+      return jsonResponse({ error: 'baseline and candidate query params are required' }, 400);
+    }
+    if (!isValidUuid(baseline) || !isValidUuid(candidate)) {
+      return jsonResponse({ error: 'Invalid session id' }, 400);
+    }
+    const comparison = await compareSessions(ctx, db, baseline, candidate);
+    if (!comparison) {
+      return jsonResponse({ error: 'One or both sessions not found' }, 404);
+    }
+    return jsonResponse(comparison);
   }
 
   const sessionIdMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)(?:\/(events))?$/);
@@ -200,6 +246,7 @@ async function handleDashboardStatic(url: URL): Promise<Response> {
 export async function handleDashboardRequest(
   config: ResolvedConfig,
   request: Request,
+  ctx?: AppContext,
 ): Promise<Response | null> {
   if (!config.dashboardEnabled) {
     return null;
@@ -213,7 +260,7 @@ export async function handleDashboardRequest(
     if (method !== 'GET' && !(isSave && method === 'POST')) {
       return new Response('Method Not Allowed', { status: 405 });
     }
-    return handleApiSessions(config, request);
+    return handleApiSessions(config, request, ctx);
   }
 
   const screenshotMatch = url.pathname.match(/^\/api\/screenshots\/([^/]+)$/);

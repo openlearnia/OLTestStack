@@ -1,6 +1,7 @@
 import puppeteer, {
   type Browser,
   type ElementHandle,
+  type Frame,
   type Page,
   type PuppeteerLifeCycleEvent,
   type SerializedAXNode,
@@ -22,6 +23,9 @@ import {
   type SelectOptionOptions,
   type UploadFilesOptions,
   type MonitoringHooks,
+  type FrameInfo,
+  type BrowserCookie,
+  type EnterFrameOptions,
 } from './adapter.js';
 import { PageMonitoringBuffer } from './page-monitoring.js';
 
@@ -65,6 +69,7 @@ interface BrowserEntry {
 interface PageEntry {
   page: Page;
   browserId: string;
+  activeFrame: Frame | null;
 }
 
 function mapWaitUntil(waitUntil: NavigateOptions['waitUntil'] = 'load'): PuppeteerLifeCycleEvent {
@@ -220,7 +225,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
       const pageId = crypto.randomUUID();
       const targetId = pageId;
 
-      this.pages.set(pageId, { page, browserId: browser.id });
+      this.pages.set(pageId, { page, browserId: browser.id, activeFrame: null });
 
       return {
         id: pageId,
@@ -314,9 +319,9 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
   }
 
   async getAccessibilityTree(page: CdpPage): Promise<CdpNode[]> {
-    const pageEntry = this.getPageEntry(page);
+    const context = this.getActiveContext(page);
     try {
-      const snapshot = await pageEntry.accessibility.snapshot({ interestingOnly: false });
+      const snapshot = await (context as Page).accessibility.snapshot({ interestingOnly: false });
       if (!snapshot) return [];
 
       const nodes: CdpNode[] = [];
@@ -346,7 +351,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
 
       walk(snapshot, 0);
 
-      const domNodes = await this.extractDomInteractiveElements(pageEntry);
+      const domNodes = await this.extractDomInteractiveElements(context);
       return mergeNodes(nodes, domNodes, page.id);
     } catch (error) {
       throw new CdpError(
@@ -669,8 +674,8 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
   }
 
   async getVisibleText(page: CdpPage): Promise<string> {
-    const pageEntry = this.getPageEntry(page);
-    return pageEntry.evaluate(() => {
+    const context = this.getActiveContext(page);
+    return context.evaluate(() => {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       const lines: string[] = [];
       let node: Node | null = walker.nextNode();
@@ -692,8 +697,149 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
   }
 
   async getOuterHtml(page: CdpPage): Promise<string> {
+    const context = this.getActiveContext(page);
+    return context.evaluate(() => document.documentElement.outerHTML);
+  }
+
+  async listFrames(page: CdpPage): Promise<FrameInfo[]> {
     const pageEntry = this.getPageEntry(page);
-    return pageEntry.evaluate(() => document.documentElement.outerHTML);
+    const frames = pageEntry.frames();
+    const main = pageEntry.mainFrame();
+    return frames.map((frame, index) => {
+      const parent = frame.parentFrame();
+      return {
+        index,
+        name: frame.name() || undefined,
+        url: frame.url(),
+        isMain: frame === main,
+        parentIndex: parent ? frames.indexOf(parent) : undefined,
+      };
+    });
+  }
+
+  async enterFrame(page: CdpPage, options: EnterFrameOptions): Promise<FrameInfo> {
+    const entry = this.getPageEntryOrThrow(page);
+    const frames = entry.page.frames();
+    const main = entry.page.mainFrame();
+    let target: Frame | undefined;
+
+    if (options.frameIndex !== undefined) {
+      target = frames[options.frameIndex];
+    } else if (options.frameQuery) {
+      const iframe = await entry.page.$(options.frameQuery);
+      if (!iframe) {
+        throw new CdpError(
+          `No iframe matches selector '${options.frameQuery}'`,
+          'Frame not found',
+          'enterFrame',
+          true,
+        );
+      }
+      target = (await iframe.contentFrame()) ?? undefined;
+      if (!target) {
+        throw new CdpError(
+          `Iframe '${options.frameQuery}' has no content frame`,
+          'Frame not attached',
+          'enterFrame',
+          true,
+        );
+      }
+    } else if (options.frameUrl) {
+      target = frames.find((frame) => frame.url().includes(options.frameUrl!));
+    } else {
+      throw new CdpError(
+        'frameIndex, frameQuery, or frameUrl is required for enter',
+        'Missing frame selector',
+        'enterFrame',
+        true,
+      );
+    }
+
+    if (!target) {
+      throw new CdpError(
+        'Target frame not found',
+        'Frame not found',
+        'enterFrame',
+        true,
+      );
+    }
+
+    entry.activeFrame = target === main ? null : target;
+    this.elementHandles.delete(page.id);
+
+    const index = frames.indexOf(target);
+    return {
+      index,
+      name: target.name() || undefined,
+      url: target.url(),
+      isMain: target === main,
+      parentIndex: target.parentFrame() ? frames.indexOf(target.parentFrame()!) : undefined,
+    };
+  }
+
+  async exitFrame(page: CdpPage): Promise<void> {
+    const entry = this.getPageEntryOrThrow(page);
+    entry.activeFrame = null;
+    this.elementHandles.delete(page.id);
+  }
+
+  async getCookies(browser: CdpBrowser, urls?: string[]): Promise<BrowserCookie[]> {
+    const page = this.getFirstPageForBrowser(browser.id);
+    if (!page) {
+      throw new CdpError(
+        `No open pages for browser ${browser.id}`,
+        'No pages',
+        'getCookies',
+        true,
+      );
+    }
+    const cookies = await page.cookies(...(urls ?? []));
+    return cookies.map((cookie) => ({
+      name: cookie.name,
+      value: cookie.value,
+      domain: cookie.domain,
+      path: cookie.path,
+      expires: cookie.expires,
+      httpOnly: cookie.httpOnly,
+      secure: cookie.secure,
+      sameSite: cookie.sameSite as BrowserCookie['sameSite'],
+    }));
+  }
+
+  async setCookies(browser: CdpBrowser, cookies: BrowserCookie[]): Promise<void> {
+    const page = this.getFirstPageForBrowser(browser.id);
+    if (!page) {
+      throw new CdpError(
+        `No open pages for browser ${browser.id}`,
+        'No pages',
+        'setCookies',
+        true,
+      );
+    }
+    await page.setCookie(...cookies);
+  }
+
+  async clearCookies(browser: CdpBrowser, urls?: string[]): Promise<void> {
+    const page = this.getFirstPageForBrowser(browser.id);
+    if (!page) {
+      throw new CdpError(
+        `No open pages for browser ${browser.id}`,
+        'No pages',
+        'clearCookies',
+        true,
+      );
+    }
+
+    if (urls && urls.length > 0) {
+      const existing = await page.cookies(...urls);
+      if (existing.length > 0) {
+        await page.deleteCookie(...existing);
+      }
+      return;
+    }
+
+    const client = await page.target().createCDPSession();
+    await client.send('Network.clearBrowserCookies');
   }
 
   startPageMonitoring(page: CdpPage, hooks?: MonitoringHooks): void {
@@ -737,10 +883,10 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     const cached = pageHandles.get(cacheKey);
     if (cached) return cached;
 
-    const pageEntry = this.getPageEntry(page);
+    const context = this.getActiveContext(page);
 
     try {
-      const handle = await this.lookupElementHandle(pageEntry, nodeId, tag);
+      const handle = await this.lookupElementHandle(context, nodeId, tag);
       if (handle) {
         pageHandles.set(cacheKey, handle);
       }
@@ -750,10 +896,10 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }
   }
 
-  private async lookupElementHandle(page: Page, nodeId: string, tag?: string): Promise<ElementHandle | null> {
+  private async lookupElementHandle(context: Page | Frame, nodeId: string, tag?: string): Promise<ElementHandle | null> {
     const domIndex = parseDomIndexFromNodeId(nodeId);
     if (domIndex !== null) {
-      const handles = await page.$$(INTERACTIVE_SELECTOR);
+      const handles = await context.$$(INTERACTIVE_SELECTOR);
       const handle = handles[domIndex] ?? null;
       if (!handle) return null;
 
@@ -768,7 +914,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     const roleName = parseRoleNameFromNodeId(nodeId);
     if (!roleName) return null;
 
-    const handle = await page.evaluateHandle(
+    const handle = await context.evaluateHandle(
       ({ selector, role, name, expectedTag }) => {
         function inferInputRole(el: HTMLElement): string {
           const type = (el as HTMLInputElement).type?.toLowerCase() ?? 'text';
@@ -816,7 +962,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     return element;
   }
 
-  private async extractDomInteractiveElements(page: Page): Promise<CdpNode[]> {
+  private async extractDomInteractiveElements(context: Page | Frame): Promise<CdpNode[]> {
     type DomScanResult = {
       nodeId: string;
       role: string;
@@ -827,7 +973,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
       regionHint?: string;
     };
 
-    return page.evaluate((selector: string): DomScanResult[] => {
+    return context.evaluate((selector: string): DomScanResult[] => {
       const results: DomScanResult[] = [];
 
       function inferRegion(el: HTMLElement): string | undefined {
@@ -915,7 +1061,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }, INTERACTIVE_SELECTOR);
   }
 
-  private getPageEntry(page: CdpPage): Page {
+  private getPageEntryOrThrow(page: CdpPage): PageEntry {
     const entry = this.pages.get(page.id);
     if (!entry) {
       throw new CdpError(
@@ -925,7 +1071,25 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
         false,
       );
     }
-    return entry.page;
+    return entry;
+  }
+
+  private getActiveContext(page: CdpPage): Page | Frame {
+    const entry = this.getPageEntryOrThrow(page);
+    return entry.activeFrame ?? entry.page.mainFrame();
+  }
+
+  private getFirstPageForBrowser(browserId: string): Page | undefined {
+    for (const entry of this.pages.values()) {
+      if (entry.browserId === browserId) {
+        return entry.page;
+      }
+    }
+    return undefined;
+  }
+
+  private getPageEntry(page: CdpPage): Page {
+    return this.getPageEntryOrThrow(page).page;
   }
 
   private async requireElementHandle(page: CdpPage, nodeId: string, tag?: string): Promise<ElementHandle> {

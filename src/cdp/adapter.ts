@@ -99,6 +99,31 @@ export interface ConsoleEntry {
   source?: string;
 }
 
+export interface FrameInfo {
+  index: number;
+  name?: string;
+  url: string;
+  isMain: boolean;
+  parentIndex?: number;
+}
+
+export interface BrowserCookie {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+}
+
+export interface EnterFrameOptions {
+  frameIndex?: number;
+  frameQuery?: string;
+  frameUrl?: string;
+}
+
 export interface CdpAdapter {
   launchBrowser(options: LaunchOptions): Promise<CdpBrowser>;
   closeBrowser(browser: CdpBrowser): Promise<void>;
@@ -149,6 +174,14 @@ export interface CdpAdapter {
   getConsoleEntries(page: CdpPage): ConsoleEntry[];
   getInFlightNetworkCount(page: CdpPage): number;
   getLastNetworkActivityMs(page: CdpPage): number;
+
+  listFrames(page: CdpPage): Promise<FrameInfo[]>;
+  enterFrame(page: CdpPage, options: EnterFrameOptions): Promise<FrameInfo>;
+  exitFrame(page: CdpPage): Promise<void>;
+
+  getCookies(browser: CdpBrowser, urls?: string[]): Promise<BrowserCookie[]>;
+  setCookies(browser: CdpBrowser, cookies: BrowserCookie[]): Promise<void>;
+  clearCookies(browser: CdpBrowser, urls?: string[]): Promise<void>;
 }
 
 export class CdpError extends Error {

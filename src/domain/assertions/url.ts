@@ -5,7 +5,7 @@ import { mapCdpError } from '../../cdp/error-mapper.js';
 import { z } from 'zod';
 import { resolvePageSession, toCdpPage } from '../shared/resolve-page.js';
 import { matchesUrl } from './match-utils.js';
-import { assertionFail, assertionPass } from './result.js';
+import { assertionFail, assertionPass, type AssertSoftFailResult } from './result.js';
 
 const urlSchema = z
   .object({
@@ -13,6 +13,7 @@ const urlSchema = z
     url: z.string().min(1),
     match: z.enum(['equals', 'contains']).optional(),
     negate: z.boolean().optional(),
+    soft: z.boolean().optional(),
   })
   .strict();
 
@@ -25,7 +26,7 @@ export interface AssertUrlPassResult {
 export async function assertUrl(
   ctx: AppContext,
   input: unknown,
-): Promise<McpSuccessResponse<AssertUrlPassResult> | McpErrorResponse> {
+): Promise<McpSuccessResponse<AssertUrlPassResult> | McpSuccessResponse<AssertSoftFailResult> | McpErrorResponse> {
   const parsed = urlSchema.safeParse(input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -34,7 +35,7 @@ export async function assertUrl(
     });
   }
 
-  const { pageId, url, match = 'contains', negate = false } = parsed.data;
+  const { pageId, url, match = 'contains', negate = false, soft = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -60,6 +61,7 @@ export async function assertUrl(
           message,
           { url, match, negate: true },
           { url: currentUrl },
+          soft,
         );
       }
       const message =
@@ -97,6 +99,7 @@ export async function assertUrl(
       message,
       { url, match },
       { url: currentUrl },
+      soft,
     );
   } catch (error) {
     const mapped = mapCdpError(error, 'assert.url');

@@ -10,7 +10,7 @@ import {
   matchesQuery,
 } from '../elements/element-matcher.js';
 import { resolvePageSession, toCdpPage } from '../shared/resolve-page.js';
-import { assertionFail, assertionPass } from './result.js';
+import { assertionFail, assertionPass, type AssertSoftFailResult } from './result.js';
 
 const existsSchema = z
   .object({
@@ -18,6 +18,7 @@ const existsSchema = z
     query: z.string().min(1).optional(),
     elementId: z.string().uuid().optional(),
     negate: z.boolean().optional(),
+    soft: z.boolean().optional(),
   })
   .strict()
   .refine((data) => data.query !== undefined || data.elementId !== undefined, {
@@ -37,7 +38,7 @@ export interface AssertExistsPassResult {
 export async function assertExists(
   ctx: AppContext,
   input: unknown,
-): Promise<McpSuccessResponse<AssertExistsPassResult> | McpErrorResponse> {
+): Promise<McpSuccessResponse<AssertExistsPassResult> | McpSuccessResponse<AssertSoftFailResult> | McpErrorResponse> {
   const parsed = existsSchema.safeParse(input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -46,7 +47,7 @@ export async function assertExists(
     });
   }
 
-  const { pageId, query, elementId, negate = false } = parsed.data;
+  const { pageId, query, elementId, negate = false, soft = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -75,6 +76,7 @@ export async function assertExists(
             `Element '${elementId}' not found on page`,
             { query: elementId, visible: true },
             { found: false },
+            soft,
           );
         }
         return assertionFail(
@@ -85,6 +87,7 @@ export async function assertExists(
           `Element '${elementId}' exists but is not visible`,
           { query: elementId, visible: true },
           { found: true, visible: false },
+          soft,
         );
       }
 
@@ -97,6 +100,7 @@ export async function assertExists(
           `Element '${elementId}' exists and is visible`,
           { query: elementId, visible: false },
           { found: true, visible: true },
+          soft,
         );
       }
 
@@ -133,6 +137,7 @@ export async function assertExists(
           : `No visible element matches query '${query}'`,
         { query: query!, visible: true },
         domOnly ? { found: true, visible: false } : { found: false },
+        soft,
       );
     }
 
@@ -145,6 +150,7 @@ export async function assertExists(
         `Element matching '${query}' exists and is visible`,
         { query: query!, visible: false },
         { found: true, visible: true, elementId: visibleMatches[0]!.elementId },
+        soft,
       );
     }
 

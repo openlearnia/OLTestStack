@@ -17,10 +17,13 @@ import { extractHtml } from '../domain/inspection/html.js';
 import { extractText } from '../domain/inspection/text.js';
 import { queryConsole } from '../domain/monitoring/console-query.js';
 import { queryNetwork } from '../domain/monitoring/network-query.js';
+import { manageCookies } from '../domain/browser/cookies.js';
+import { manageFrameContext } from '../domain/page/frame-context.js';
 import { closePage } from '../domain/page/close-page.js';
 import { createPage } from '../domain/page/create-page.js';
 import { navigatePage } from '../domain/page/navigate-page.js';
 import { reloadPage } from '../domain/page/reload-page.js';
+import { assertPageState } from '../domain/assertions/assert-state.js';
 import { assertExists } from '../domain/assertions/exists.js';
 import { assertNetwork } from '../domain/assertions/network.js';
 import { assertText } from '../domain/assertions/text.js';
@@ -40,6 +43,9 @@ import {
   assertNetworkSchema,
   assertTextSchema,
   assertUrlSchema,
+  pageAssertStateSchema,
+  pageCookiesSchema,
+  pageFrameSchema,
   browserCloseSchema,
   browserLaunchSchema,
   pageClickSchema,
@@ -290,6 +296,30 @@ export function registerTools(ctx: AppContext): ToolRegistry {
       'Assert that a network request matching a URL substring occurred with the expected status (200 or 2xx). Example: { "pageId": "...", "url": "/api/users", "status": 200 }.',
     inputSchema: assertNetworkSchema as unknown as Record<string, unknown>,
     handler: (input) => assertNetwork(ctx, input),
+  });
+
+  registry.register({
+    name: 'page_frame',
+    description:
+      'List, enter, or exit iframe context for subsequent element actions on a page. Use list to discover frames, enter with frameIndex/frameQuery/frameUrl, exit to return to main. Example: { "pageId": "...", "action": "enter", "frameQuery": "iframe#payment" }.',
+    inputSchema: pageFrameSchema as unknown as Record<string, unknown>,
+    handler: (input) => manageFrameContext(ctx, input),
+  });
+
+  registry.register({
+    name: 'page_cookies',
+    description:
+      'Get, set, or clear browser cookies for auth seeding. Requires browserId and an open page. Example: { "browserId": "...", "op": "set", "cookies": [{ "name": "session", "value": "abc", "domain": ".example.com" }] }.',
+    inputSchema: pageCookiesSchema as unknown as Record<string, unknown>,
+    handler: (input) => manageCookies(ctx, input),
+  });
+
+  registry.register({
+    name: 'page_assert_state',
+    description:
+      'Run multiple assertions in one call: exists, text, url, network, and consoleErrorCount. Supports failFast and per-check soft flags. Example: { "pageId": "...", "checks": { "exists": [{ "query": "Submit" }], "url": { "url": "/dashboard" } } }.',
+    inputSchema: pageAssertStateSchema as unknown as Record<string, unknown>,
+    handler: (input) => assertPageState(ctx, input),
   });
 
   registry.register({

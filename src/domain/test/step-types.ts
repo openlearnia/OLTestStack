@@ -13,14 +13,15 @@ export type TestStep =
       durationMs?: number;
     }
   | { action: 'screenshot'; fullPage?: boolean }
-  | { action: 'assert.exists'; query: string }
-  | { action: 'assert.text'; contains: string; match?: 'contains' | 'equals' }
-  | { action: 'assert.url'; url: string; match?: 'equals' | 'contains' }
-  | { action: 'assert.network'; url: string; status: number | string };
+  | { action: 'assert.exists'; query: string; soft?: boolean }
+  | { action: 'assert.text'; contains: string; match?: 'contains' | 'equals'; soft?: boolean }
+  | { action: 'assert.url'; url: string; match?: 'equals' | 'contains'; soft?: boolean }
+  | { action: 'assert.network'; url: string; status: number | string; soft?: boolean };
 
 export interface StepExecutionResult {
   success: boolean;
   failed: boolean;
   assertionFailure: boolean;
+  softFailure?: boolean;
   message?: string;
 }

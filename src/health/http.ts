@@ -1,9 +1,10 @@
-import type { ResolvedConfig } from '../core/config/load-config.js';
+import type { AppContext } from '../core/context.js';
 import { validateDatabaseConnection } from '../db/health.js';
 import { shouldPersistRecording } from '../db/session-lifecycle.js';
 import { handleDashboardRequest } from '../dashboard/routes.js';
 
-export async function startHealthServer(config: ResolvedConfig): Promise<void> {
+export async function startHealthServer(ctx: AppContext): Promise<void> {
+  const config = ctx.config;
   const port = config.healthPort;
   if (!port) return;
 
@@ -30,7 +31,7 @@ export async function startHealthServer(config: ResolvedConfig): Promise<void> {
         return Response.json({ status: 'ok', service: 'olteststack' });
       }
 
-      const dashboardResponse = await handleDashboardRequest(config, request);
+      const dashboardResponse = await handleDashboardRequest(config, request, ctx);
       if (dashboardResponse) {
         return dashboardResponse;
       }

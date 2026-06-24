@@ -29,21 +29,24 @@ export const testStepSchema = z.discriminatedUnion('action', [
     action: z.literal('screenshot'),
     fullPage: z.boolean().optional(),
   }),
-  z.object({ action: z.literal('assert.exists'), query: z.string().min(1) }),
+  z.object({ action: z.literal('assert.exists'), query: z.string().min(1), soft: z.boolean().optional() }),
   z.object({
     action: z.literal('assert.text'),
     contains: z.string().min(1),
     match: z.enum(['contains', 'equals']).optional(),
+    soft: z.boolean().optional(),
   }),
   z.object({
     action: z.literal('assert.url'),
     url: z.string().min(1),
     match: z.enum(['equals', 'contains']).optional(),
+    soft: z.boolean().optional(),
   }),
   z.object({
     action: z.literal('assert.network'),
     url: z.string().min(1),
     status: z.union([z.number().int(), z.string()]),
+    soft: z.boolean().optional(),
   }),
 ]);
 

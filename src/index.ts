@@ -19,7 +19,7 @@ async function main(): Promise<void> {
     scheduleSessionCleanup(ctx.config);
   }
 
-  await startHealthServer(ctx.config);
+  await startHealthServer(ctx);
   await startMcpServer(ctx);
 }
 

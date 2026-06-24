@@ -28,9 +28,9 @@ Complete reference for OLTestStack MCP tools. All tools return a JSON envelope a
 
 | Status | Count | Tools |
 |--------|-------|-------|
-| **Implemented** | 35 | V1 (27) + v1.3 Wave 1 (4) + Wave 1.5 (3) + `script_lint`; extensions on `page_wait`, `assert_*`, `browser_close`, `test_run` suite |
-| **Planned (Wave 2)** | 2 | `page_frame`, `page_cookies` |
-| **Total (v1.3 target)** | ~33–35 | See [tool-expansion-v1.3.md](../plans/tool-expansion-v1.3.md) |
+| **Implemented** | 38 | V1 (27) + Wave 1 (4) + Wave 1.5 (4) + Wave 2 (3); extensions on `page_wait`, `assert_*` (`negate`, `soft`), `browser_close`, `test_run` (`softFailures`, suite) |
+| **Deferred** | — | Steady-state tool consolidation (optional future) |
+| **Total** | 38 | See [tool-expansion-v1.3.md](../plans/tool-expansion-v1.3.md) |
 
 ---
 
@@ -670,6 +670,68 @@ Set files on `<input type="file">` via server-local paths. Paths must resolve un
 
 ---
 
+### `page_frame`
+
+List, enter, or exit iframe context. After `enter`, subsequent `page_find`, `page_click`, and assert tools scope to the active frame until `exit`.
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `action` | `list` \| `enter` \| `exit` | yes | Operation |
+| `frameIndex` | integer (≥0) | for enter | Index from `list` response |
+| `frameQuery` | string | for enter | CSS selector for `<iframe>` on main page |
+| `frameUrl` | string | for enter | URL substring match among child frames |
+
+**Example (`list`)**
+
+```json
+{ "pageId": "...", "action": "list" }
+```
+
+**Example output (`enter`)**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "action": "enter",
+    "activeFrameIndex": 1,
+    "frame": { "index": 1, "name": "payment", "url": "https://pay.example.com/", "isMain": false, "parentIndex": 0 }
+  }
+}
+```
+
+**Error cases:** `INVALID_INPUT` when `enter` lacks a selector; CDP errors when frame not found.
+
+---
+
+### `page_cookies`
+
+Get, set, or clear browser cookies (requires open browser with at least one page).
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `browserId` | string (UUID) | yes | Browser session |
+| `op` | `get` \| `set` \| `clear` | yes | Operation |
+| `cookies` | array | for `set` | Cookie objects (`name`, `value`, optional `domain`, `path`, etc.) |
+| `urls` | string[] | no | URL filter for `get` / `clear` |
+
+**Example (`set`)**
+
+```json
+{
+  "browserId": "...",
+  "op": "set",
+  "cookies": [{ "name": "session", "value": "token", "domain": ".example.com" }]
+}
+```
+
+---
+
 ### `page_press`
 
 Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos). When `elementId` is provided, the element is focused before the key is dispatched — required for grid keyboard navigation and to avoid keys landing on unrelated controls (e.g. a page-level `<select>`).
@@ -1135,6 +1197,38 @@ For `condition: "element"`, `elementId` is included in the response. For `condit
 
 ---
 
+### `page_assert_state`
+
+Run multiple assertions in one MCP call. Supports `failFast` (stop on first hard failure) and per-check or global `soft` flags.
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `checks.exists` | array | no | `{ query?, elementId?, negate?, soft? }` |
+| `checks.text` | array | no | `{ contains, match?, negate?, soft? }` |
+| `checks.url` | object | no | `{ url, match?, negate?, soft? }` |
+| `checks.network` | array | no | `{ url, status, negate?, soft? }` |
+| `checks.consoleErrorCount` | object | no | `{ max, soft? }` — fail when error-level console count exceeds `max` |
+| `failFast` | boolean | no | Stop on first hard failure |
+| `soft` | boolean | no | Default `soft` for all checks |
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "passed": true,
+    "checks": [{ "kind": "exists", "passed": true, "message": "..." }],
+    "softFailures": []
+  }
+}
+```
+
+---
+
 ### `assert_exists`
 
 Assert that an element matching a query exists and is visible, or that a known `elementId` is visible. Returns `elementId` on pass; `ASSERTION_FAILED` with expected/actual on failure.
@@ -1147,6 +1241,7 @@ Assert that an element matching a query exists and is visible, or that a known `
 | `query` | string (min 1 char) | one of query/elementId | Text query (same semantics as `page_find`) |
 | `elementId` | string (UUID) | one of query/elementId | Previously discovered element |
 | `negate` | boolean | no | When `true`, pass if element is absent or hidden |
+| `soft` | boolean | no | When `true`, record failure but return `ok: true` with `passed: false` (see `test_run` `softFailures`) |
 
 **Example input**
 
@@ -1193,6 +1288,7 @@ Assert that visible page text contains or equals a string (same source as `page_
 | `contains` | string (min 1 char) | yes | — |
 | `match` | enum | no | `"contains"` |
 | `negate` | boolean | no | `false` — pass when text does not match |
+| `soft` | boolean | no | Record failure without `ASSERTION_FAILED` error |
 
 `match` values: `"contains"` \| `"equals"`
 
@@ -1240,6 +1336,7 @@ Assert that the current page URL contains or equals an expected value.
 | `url` | string (min 1 char) | yes | — |
 | `match` | enum | no | `"contains"` |
 | `negate` | boolean | no | `false` — pass when URL does not match |
+| `soft` | boolean | no | Record failure without `ASSERTION_FAILED` error |
 
 **Example input**
 
@@ -1285,6 +1382,7 @@ Assert that a network request matching a URL substring occurred with the expecte
 | `url` | string (min 1 char) | yes | URL substring to match |
 | `status` | integer or string | yes | Exact code (200) or range (`2xx`) |
 | `negate` | boolean | no | `false` — pass when no matching request |
+| `soft` | boolean | no | Record failure without `ASSERTION_FAILED` error |
 
 **Example input**
 
@@ -1607,7 +1705,7 @@ Execute a complete browser test with explicit steps, an inline script, script fi
 | `stopOnFailure` | boolean | no | `true` | Halt on first step failure |
 | `timeoutMs` | integer (≥5000) | no | `60000` | Overall test timeout |
 
-**Step actions:** `navigate`, `click`, `type`, `press`, `scroll`, `wait`, `screenshot`, `assert.exists`, `assert.text`, `assert.url`, `assert.network`
+**Step actions:** `navigate`, `click`, `type`, `press`, `scroll`, `wait`, `screenshot`, `assert.exists`, `assert.text`, `assert.url`, `assert.network` — assert steps accept optional `soft: true`.
 
 **Example input (explicit steps)**
 
@@ -1677,6 +1775,7 @@ Escape a literal `${...}` in script text with `$$` (e.g. `$${PRICE}` stays `${PR
       "actionsPerformed": [],
       "assertionsPassed": [],
       "assertionsFailed": [],
+      "softFailures": [],
       "screenshots": [],
       "networkErrors": [],
       "consoleErrors": []
@@ -1693,7 +1792,18 @@ Escape a literal `${...}` in script text with `$$` (e.g. `$${PRICE}` stays `${PR
 | `INTERNAL_ERROR` | Browser launch failed |
 | `TIMEOUT` | Test exceeded `timeoutMs` (report status `"error"`) |
 
-**Note:** Step and assertion failures are captured in the report (`status: "failed"`), not as MCP errors. Screenshots are captured after each assertion step.
+**Note:** Step and assertion failures are captured in the report (`status: "failed"`), not as MCP errors. Soft assertion failures appear in `softFailures[]` and do not fail the run unless paired with hard failures. Screenshots are captured after each assertion step.
+
+---
+
+## Dashboard REST API (Wave 2)
+
+HTTP endpoints on the health server when `DASHBOARD_ENABLED=true` (not MCP tools).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sessions/:id/export` | Same payload as `session_export` from PostgreSQL (`?name=&goal=` optional) |
+| `GET` | `/api/sessions/compare?baseline=&candidate=` | Compare event/step/assertion counts between two persisted sessions |
 
 ---
 

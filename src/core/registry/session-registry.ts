@@ -63,12 +63,17 @@ export class SessionRegistry {
     return this.withLock(() => this.pages.get(pageId));
   }
 
-  async updatePage(pageId: string, updates: Partial<Pick<PageSession, 'url' | 'title'>>): Promise<void> {
+  async updatePage(
+    pageId: string,
+    updates: Partial<Pick<PageSession, 'url' | 'title' | 'activeFrameIndex' | 'activeFrameUrl'>>,
+  ): Promise<void> {
     await this.withLock(() => {
       const page = this.pages.get(pageId);
       if (!page) return;
       if (updates.url !== undefined) page.url = updates.url;
       if (updates.title !== undefined) page.title = updates.title;
+      if (updates.activeFrameIndex !== undefined) page.activeFrameIndex = updates.activeFrameIndex;
+      if (updates.activeFrameUrl !== undefined) page.activeFrameUrl = updates.activeFrameUrl;
     });
   }
 

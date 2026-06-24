@@ -8,7 +8,7 @@ import {
   findMatchingNetworkRequest,
   isValidNetworkStatusInput,
 } from './match-utils.js';
-import { assertionFail, assertionPass } from './result.js';
+import { assertionFail, assertionPass, type AssertSoftFailResult } from './result.js';
 
 const networkSchema = z
   .object({
@@ -16,6 +16,7 @@ const networkSchema = z
     url: z.string().min(1),
     status: z.union([z.number().int(), z.string()]),
     negate: z.boolean().optional(),
+    soft: z.boolean().optional(),
   })
   .strict()
   .refine((data) => isValidNetworkStatusInput(data.status), {
@@ -41,7 +42,7 @@ export interface AssertNetworkPassResult {
 export async function assertNetwork(
   ctx: AppContext,
   input: unknown,
-): Promise<McpSuccessResponse<AssertNetworkPassResult> | McpErrorResponse> {
+): Promise<McpSuccessResponse<AssertNetworkPassResult> | McpSuccessResponse<AssertSoftFailResult> | McpErrorResponse> {
   const parsed = networkSchema.safeParse(input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -50,7 +51,7 @@ export async function assertNetwork(
     });
   }
 
-  const { pageId, url, status, negate = false } = parsed.data;
+  const { pageId, url, status, negate = false, soft = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -71,7 +72,7 @@ export async function assertNetwork(
           status: networkMatch.status,
           method: networkMatch.method,
         },
-      });
+      }, soft);
     }
 
     const partialMatches = countPartialUrlMatches(entries, url);
@@ -107,6 +108,7 @@ export async function assertNetwork(
     message,
     { url, status },
     { matchingRequests: partialMatches },
+    soft,
   );
 }
 

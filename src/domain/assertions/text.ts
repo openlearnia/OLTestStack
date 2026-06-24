@@ -5,7 +5,7 @@ import { mapCdpError } from '../../cdp/error-mapper.js';
 import { z } from 'zod';
 import { resolvePageSession, toCdpPage } from '../shared/resolve-page.js';
 import { matchesText, textSnippet } from './match-utils.js';
-import { assertionFail, assertionPass } from './result.js';
+import { assertionFail, assertionPass, type AssertSoftFailResult } from './result.js';
 
 const textSchema = z
   .object({
@@ -13,6 +13,7 @@ const textSchema = z
     contains: z.string().min(1),
     match: z.enum(['contains', 'equals']).optional(),
     negate: z.boolean().optional(),
+    soft: z.boolean().optional(),
   })
   .strict();
 
@@ -25,7 +26,7 @@ export interface AssertTextPassResult {
 export async function assertText(
   ctx: AppContext,
   input: unknown,
-): Promise<McpSuccessResponse<AssertTextPassResult> | McpErrorResponse> {
+): Promise<McpSuccessResponse<AssertTextPassResult> | McpSuccessResponse<AssertSoftFailResult> | McpErrorResponse> {
   const parsed = textSchema.safeParse(input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -34,7 +35,7 @@ export async function assertText(
     });
   }
 
-  const { pageId, contains, match = 'contains', negate = false } = parsed.data;
+  const { pageId, contains, match = 'contains', negate = false, soft = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -57,7 +58,7 @@ export async function assertText(
           negate: true,
         }, {
           textSnippet: textSnippet(pageText),
-        });
+        }, soft);
       }
       const message =
         match === 'equals'
@@ -91,7 +92,7 @@ export async function assertText(
       match,
     }, {
       textSnippet: textSnippet(pageText),
-    });
+    }, soft);
   } catch (error) {
     const mapped = mapCdpError(error, 'assert.text');
     return createError(mapped.code, mapped.message, { ...mapped.details, pageId });

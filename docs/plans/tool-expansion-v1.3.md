@@ -2,7 +2,7 @@
 
 Expand OLTestStack MCP from 27 → ~33 tools with atomic query actions, session introspection, richer waits, and negative assertions.
 
-**Status:** Wave 1 implemented (31 tools). Wave 1.5 deferred (3 tools). Wave 2 planned (2 tools).
+**Status:** Wave 1 implemented (31 tools). Wave 1.5 implemented (35 tools). Wave 2 implemented (38 tools).
 
 ---
 
@@ -67,7 +67,7 @@ Expand OLTestStack MCP from 27 → ~33 tools with atomic query actions, session 
 
 **Tool count:** 27 → **31**
 
-### Wave 1.5 — Form & list helpers (deferred)
+### Wave 1.5 — Form & list helpers (implemented)
 
 | Tool | Purpose |
 |------|---------|
@@ -75,18 +75,21 @@ Expand OLTestStack MCP from 27 → ~33 tools with atomic query actions, session 
 | `page_upload` | Set file input via local path |
 | `session_list` | Paginated persisted sessions (wraps dashboard list) |
 
-**Tool count:** 31 → **34**
+**Tool count:** 31 → **35** (includes `script_lint`)
 
-### Wave 2 — Context & state (planned)
+### Wave 2 — Context & state (implemented)
 
-| Tool | Purpose |
-|------|---------|
-| `page_frame` | Switch iframe context for subsequent actions |
-| `page_cookies` | Get/set cookies for auth shortcuts |
+| Tool / extension | Purpose |
+|------------------|---------|
+| `page_frame` | List/enter/exit iframe context for subsequent actions |
+| `page_cookies` | Get/set/clear cookies for auth seeding |
+| `page_assert_state` | Composite multi-check assert (exists, text, url, network, consoleErrorCount) |
+| Assert `soft` | `soft?: boolean` on `assert_*` — failures collected in `test_run` `softFailures[]` |
+| Dashboard REST | `GET /api/sessions/:id/export`, `GET /api/sessions/compare?baseline=&candidate=` |
 
-**Tool count:** 34 → **36** (trim or merge before ship if count exceeds 33 target)
+**Tool count:** 35 → **38** MCP tools
 
-**Target steady state:** ~32–33 tools after Wave 1.5 consolidation review.
+**Deferred:** None from Wave 2 scope. Steady-state consolidation (merge overlapping tools) remains a future review item.
 
 ---
 
@@ -188,15 +191,28 @@ Paginated list wrapping `listSessions`. Schema: `page`, `limit`, `status`, `sear
 
 ---
 
-### Wave 2 (planned)
+### Wave 2 (implemented)
 
-#### `page_frame` — P2
+#### `page_frame` — P2 ✅
 
-Switch to iframe by index, name, or URL. Subsequent element queries scoped to frame.
+Switch iframe context: `action: list | enter | exit`. Enter by `frameIndex`, `frameQuery` (CSS), or `frameUrl`. Subsequent element queries scoped to active frame.
 
-#### `page_cookies` — P2
+#### `page_cookies` — P2 ✅
 
-`get` / `set` / `clear` cookies for auth seeding without full login replay.
+`op: get | set | clear` with `browserId`. `cookies[]` for set; `urls[]` filter for get/clear.
+
+#### `page_assert_state` — debate consensus ✅
+
+Composite checks in one call: `exists[]`, `text[]`, `url`, `network[]`, `consoleErrorCount`. Supports `failFast` and per-check `soft`.
+
+#### Assert `soft` — debate consensus ✅
+
+All four `assert_*` tools accept `soft?: boolean`. Soft failures return `ok: true` with `passed: false`; `test_run` reports `softFailures[]` in `TestReport`.
+
+#### Dashboard REST — debate consensus ✅
+
+- `GET /api/sessions/:id/export` — same payload as `session_export` from DB
+- `GET /api/sessions/compare?baseline=&candidate=` — event/step/assertion deltas
 
 ---
 
@@ -220,7 +236,7 @@ Switch to iframe by index, name, or URL. Subsequent element queries scoped to fr
 |------|-------------|----------|-------|
 | V1 baseline | 27 | — | 27 |
 | Wave 1 | 4 new + 3 extensions | — | **31** |
-| Wave 1.5 | — | 3 | 34 |
-| Wave 2 | — | 2 | 36 |
+| Wave 1.5 | 3 + `script_lint` | — | **35** |
+| Wave 2 | 3 new + soft asserts + dashboard REST | — | **38** |
 
-**v1.3 target:** consolidate to **32–33** after Wave 1.5 review (may merge `session_get` events into lighter variant or drop `page_cookies` if redundant).
+**v1.3 steady state:** 38 MCP tools; consolidation review may merge overlapping surface later.

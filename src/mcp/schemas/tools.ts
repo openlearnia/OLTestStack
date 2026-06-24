@@ -375,6 +375,7 @@ export const assertExistsSchema = {
     query: { type: 'string', minLength: 1 },
     elementId: { type: 'string', format: 'uuid' },
     negate: { type: 'boolean', default: false, description: 'Assert the opposite (element absent, text/url/network not matched)' },
+    soft: { type: 'boolean', default: false, description: 'Record failure without failing the call (collected in test_run softFailures)' },
   },
   required: ['pageId'],
   additionalProperties: false,
@@ -391,6 +392,7 @@ export const assertTextSchema = {
       default: 'contains',
     },
     negate: { type: 'boolean', default: false },
+    soft: { type: 'boolean', default: false },
   },
   required: ['pageId', 'contains'],
   additionalProperties: false,
@@ -407,6 +409,7 @@ export const assertUrlSchema = {
       default: 'contains',
     },
     negate: { type: 'boolean', default: false },
+    soft: { type: 'boolean', default: false },
   },
   required: ['pageId', 'url'],
   additionalProperties: false,
@@ -425,8 +428,129 @@ export const assertNetworkSchema = {
       description: 'Exact status code (200) or range (2xx)',
     },
     negate: { type: 'boolean', default: false },
+    soft: { type: 'boolean', default: false },
   },
   required: ['pageId', 'url', 'status'],
+  additionalProperties: false,
+} as const;
+
+export const pageFrameSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    action: { type: 'string', enum: ['list', 'enter', 'exit'] },
+    frameIndex: { type: 'integer', minimum: 0, description: 'Index from list action' },
+    frameQuery: { type: 'string', minLength: 1, description: 'CSS selector for iframe element on main page' },
+    frameUrl: { type: 'string', minLength: 1, description: 'URL substring to match child frame' },
+  },
+  required: ['pageId', 'action'],
+  additionalProperties: false,
+} as const;
+
+export const pageCookiesSchema = {
+  type: 'object',
+  properties: {
+    browserId: { type: 'string', format: 'uuid' },
+    op: { type: 'string', enum: ['get', 'set', 'clear'] },
+    cookies: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          value: { type: 'string' },
+          domain: { type: 'string' },
+          path: { type: 'string' },
+          expires: { type: 'number' },
+          httpOnly: { type: 'boolean' },
+          secure: { type: 'boolean' },
+          sameSite: { type: 'string', enum: ['Strict', 'Lax', 'None'] },
+        },
+        required: ['name', 'value'],
+      },
+      description: 'Required for set',
+    },
+    urls: {
+      type: 'array',
+      items: { type: 'string', minLength: 1 },
+      description: 'Optional URL filter for get/clear',
+    },
+  },
+  required: ['browserId', 'op'],
+  additionalProperties: false,
+} as const;
+
+export const pageAssertStateSchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    checks: {
+      type: 'object',
+      properties: {
+        exists: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              query: { type: 'string' },
+              elementId: { type: 'string', format: 'uuid' },
+              negate: { type: 'boolean' },
+              soft: { type: 'boolean' },
+            },
+          },
+        },
+        text: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              contains: { type: 'string' },
+              match: { type: 'string', enum: ['contains', 'equals'] },
+              negate: { type: 'boolean' },
+              soft: { type: 'boolean' },
+            },
+            required: ['contains'],
+          },
+        },
+        url: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            match: { type: 'string', enum: ['equals', 'contains'] },
+            negate: { type: 'boolean' },
+            soft: { type: 'boolean' },
+          },
+          required: ['url'],
+        },
+        network: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' },
+              status: {
+                oneOf: [{ type: 'integer' }, { type: 'string', pattern: '^[1-5]xx$' }],
+              },
+              negate: { type: 'boolean' },
+              soft: { type: 'boolean' },
+            },
+            required: ['url', 'status'],
+          },
+        },
+        consoleErrorCount: {
+          type: 'object',
+          properties: {
+            max: { type: 'integer', minimum: 0 },
+            soft: { type: 'boolean' },
+          },
+          required: ['max'],
+        },
+      },
+    },
+    failFast: { type: 'boolean', default: false },
+    soft: { type: 'boolean', default: false, description: 'Default soft flag for all checks' },
+  },
+  required: ['pageId', 'checks'],
   additionalProperties: false,
 } as const;
 

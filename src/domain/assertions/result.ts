@@ -4,6 +4,20 @@ import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/resp
 
 export type AssertionKind = 'exists' | 'text' | 'url' | 'network';
 
+export interface AssertSoftFailResult {
+  passed: false;
+  soft: true;
+  assertion: AssertionKind;
+  message: string;
+  expected: unknown;
+  actual: unknown;
+}
+
+export type AssertHandlerResponse<TPass> =
+  | McpSuccessResponse<TPass>
+  | McpSuccessResponse<AssertSoftFailResult>
+  | McpErrorResponse;
+
 export function emitAssertionRecording(
   ctx: AppContext,
   browserId: string,
@@ -47,14 +61,35 @@ export function assertionFail(
   message: string,
   expected: unknown,
   actual: unknown,
-): McpErrorResponse {
+  soft = false,
+): McpErrorResponse | McpSuccessResponse<{
+  passed: false;
+  soft: true;
+  assertion: AssertionKind;
+  message: string;
+  expected: unknown;
+  actual: unknown;
+}> {
   emitAssertionRecording(ctx, browserId, pageId, {
     passed: false,
     assertion,
     message,
     expected,
     actual,
+    soft,
   });
+
+  if (soft) {
+    return success({
+      passed: false as const,
+      soft: true as const,
+      assertion,
+      message,
+      expected,
+      actual,
+    });
+  }
+
   return createError('ASSERTION_FAILED', message, {
     assertion,
     expected,

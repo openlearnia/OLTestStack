@@ -19,6 +19,13 @@ export interface TestReport {
     actual: unknown;
     timestamp: string;
   }>;
+  softFailures: Array<{
+    assertion: string;
+    message: string;
+    expected?: unknown;
+    actual?: unknown;
+    timestamp: string;
+  }>;
   screenshots: string[];
   networkErrors: Array<{
     url: string;
@@ -42,7 +49,7 @@ function deriveStatus(events: RecordedEvent[], errorOccurred: boolean): TestRepo
   if (errorOccurred || events.some((event) => event.type === 'error')) {
     return 'error';
   }
-  if (events.some((event) => event.type === 'assertion' && event.payload.passed === false)) {
+  if (events.some((event) => event.type === 'assertion' && event.payload.passed === false && !event.payload.soft)) {
     return 'failed';
   }
   return 'passed';
@@ -69,7 +76,17 @@ export function generateReport(
     }));
 
   const assertionsFailed = events
-    .filter((event) => event.type === 'assertion' && event.payload.passed === false)
+    .filter((event) => event.type === 'assertion' && event.payload.passed === false && !event.payload.soft)
+    .map((event) => ({
+      assertion: String(event.payload.assertion ?? 'unknown'),
+      message: String(event.payload.message ?? ''),
+      expected: event.payload.expected,
+      actual: event.payload.actual,
+      timestamp: event.timestamp,
+    }));
+
+  const softFailures = events
+    .filter((event) => event.type === 'assertion' && event.payload.passed === false && event.payload.soft === true)
     .map((event) => ({
       assertion: String(event.payload.assertion ?? 'unknown'),
       message: String(event.payload.message ?? ''),
@@ -107,6 +124,7 @@ export function generateReport(
     ),
     assertionsPassed,
     assertionsFailed,
+    softFailures,
     screenshots: events
       .filter((event) => event.type === 'screenshot')
       .map(screenshotPath)
