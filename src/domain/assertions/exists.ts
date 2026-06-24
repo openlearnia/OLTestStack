@@ -17,6 +17,7 @@ const existsSchema = z
     pageId: z.string().uuid(),
     query: z.string().min(1).optional(),
     elementId: z.string().uuid().optional(),
+    negate: z.boolean().optional(),
   })
   .strict()
   .refine((data) => data.query !== undefined || data.elementId !== undefined, {
@@ -28,7 +29,9 @@ export interface AssertExistsPassResult {
   passed: true;
   assertion: 'exists';
   message: string;
-  elementId: string;
+  elementId?: string;
+  query?: string;
+  negate?: boolean;
 }
 
 export async function assertExists(
@@ -43,7 +46,7 @@ export async function assertExists(
     });
   }
 
-  const { pageId, query, elementId } = parsed.data;
+  const { pageId, query, elementId, negate = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -53,19 +56,27 @@ export async function assertExists(
   try {
     if (elementId) {
       const element = await ctx.registry.getElement(pageId, elementId);
-      if (!element) {
-        return assertionFail(
-          ctx,
-          page.browserId,
-          pageId,
-          'exists',
-          `Element '${elementId}' not found on page`,
-          { query: elementId, visible: true },
-          { found: false },
-        );
-      }
-
-      if (!element.visible) {
+      if (!element || !element.visible) {
+        if (negate) {
+          const message = element
+            ? `Element '${elementId}' is not visible`
+            : `Element '${elementId}' does not exist`;
+          return assertionPass(ctx, page.browserId, pageId, 'exists', message, {
+            elementId,
+            negate: true,
+          });
+        }
+        if (!element) {
+          return assertionFail(
+            ctx,
+            page.browserId,
+            pageId,
+            'exists',
+            `Element '${elementId}' not found on page`,
+            { query: elementId, visible: true },
+            { found: false },
+          );
+        }
         return assertionFail(
           ctx,
           page.browserId,
@@ -74,6 +85,18 @@ export async function assertExists(
           `Element '${elementId}' exists but is not visible`,
           { query: elementId, visible: true },
           { found: true, visible: false },
+        );
+      }
+
+      if (negate) {
+        return assertionFail(
+          ctx,
+          page.browserId,
+          pageId,
+          'exists',
+          `Element '${elementId}' exists and is visible`,
+          { query: elementId, visible: false },
+          { found: true, visible: true },
         );
       }
 
@@ -91,6 +114,15 @@ export async function assertExists(
 
     if (visibleMatches.length === 0) {
       const domOnly = matches.length > 0;
+      if (negate) {
+        const message = domOnly
+          ? `Element matching '${query}' is not visible`
+          : `No visible element matches query '${query}'`;
+        return assertionPass(ctx, page.browserId, pageId, 'exists', message, {
+          query,
+          negate: true,
+        });
+      }
       return assertionFail(
         ctx,
         page.browserId,
@@ -101,6 +133,18 @@ export async function assertExists(
           : `No visible element matches query '${query}'`,
         { query: query!, visible: true },
         domOnly ? { found: true, visible: false } : { found: false },
+      );
+    }
+
+    if (negate) {
+      return assertionFail(
+        ctx,
+        page.browserId,
+        pageId,
+        'exists',
+        `Element matching '${query}' exists and is visible`,
+        { query: query!, visible: false },
+        { found: true, visible: true, elementId: visibleMatches[0]!.elementId },
       );
     }
 

@@ -1,7 +1,9 @@
 import type { AppContext } from '../core/context.js';
 import { closeBrowser } from '../domain/browser/close-browser.js';
 import { launchBrowser } from '../domain/browser/launch-browser.js';
+import { clickByQuery } from '../domain/actions/click-query.js';
 import { clickElement } from '../domain/actions/click.js';
+import { typeByQuery } from '../domain/actions/type-query.js';
 import { pressKey } from '../domain/actions/press.js';
 import { scrollPage } from '../domain/actions/scroll.js';
 import { typeIntoElement } from '../domain/actions/type.js';
@@ -24,6 +26,8 @@ import { assertUrl } from '../domain/assertions/url.js';
 import { runTest } from '../domain/test/run-test.js';
 import { sendReport } from '../domain/debug/send-report.js';
 import { exportSession } from '../domain/recording/session-export.js';
+import { getPersistedSession } from '../domain/recording/session-get.js';
+import { getSessionStatus } from '../domain/recording/session-status.js';
 import { saveSession } from '../domain/recording/save-session.js';
 import { waitForCondition } from '../domain/waiting/wait.js';
 import { ToolRegistry } from './registry.js';
@@ -35,6 +39,7 @@ import {
   browserCloseSchema,
   browserLaunchSchema,
   pageClickSchema,
+  pageClickQuerySchema,
   pageCloseSchema,
   pageConsoleSchema,
   pageCreateSchema,
@@ -50,7 +55,10 @@ import {
   pageSnapshotSchema,
   pageTextSchema,
   pageTypeSchema,
+  pageTypeQuerySchema,
   pageWaitSchema,
+  sessionStatusSchema,
+  sessionGetSchema,
   sessionExportSchema,
   saveSessionSchema,
   sendReportSchema,
@@ -71,7 +79,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'browser_close',
     description:
-      'Close a browser and all its pages. Always call this when finished to avoid orphan processes. Example: { "browserId": "..." }.',
+      'Close a browser and all its pages. Returns reportId when persistence is enabled. Always call this when finished. Example: { "browserId": "...", "testName": "Login regression" }.',
     inputSchema: browserCloseSchema as unknown as Record<string, unknown>,
     handler: (input) => closeBrowser(ctx, input),
   });
@@ -133,11 +141,27 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   });
 
   registry.register({
+    name: 'page_click_query',
+    description:
+      'Find and click an element atomically by text query. Records the query for replay. Supports preferRegion, preferRole, and candidateIndex for disambiguation. Example: { "pageId": "...", "query": "Submit", "preferRole": "button" }.',
+    inputSchema: pageClickQuerySchema as unknown as Record<string, unknown>,
+    handler: (input) => clickByQuery(ctx, input),
+  });
+
+  registry.register({
     name: 'page_type',
     description:
       'Type text into an input or textarea element. Clears existing value unless append is true. Pass optional query (from page_find) for replayable session_export scripts. Example: { "pageId": "...", "elementId": "...", "value": "hello", "query": "Email" }.',
     inputSchema: pageTypeSchema as unknown as Record<string, unknown>,
     handler: (input) => typeIntoElement(ctx, input),
+  });
+
+  registry.register({
+    name: 'page_type_query',
+    description:
+      'Find and type into an element atomically by text query. Records the query for replay. Supports preferRegion, preferRole, and candidateIndex for disambiguation. Example: { "pageId": "...", "query": "Email", "value": "user@example.com" }.',
+    inputSchema: pageTypeQuerySchema as unknown as Record<string, unknown>,
+    handler: (input) => typeByQuery(ctx, input),
   });
 
   registry.register({
@@ -207,7 +231,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'page_wait',
     description:
-      'Wait for a condition: element appearance, URL match, network idle, or fixed timeout. Example: { "pageId": "...", "condition": "element", "query": "Submit" }.',
+      'Wait for a condition: element, elementHidden, URL, network idle, network request, or fixed timeout. Example: { "pageId": "...", "condition": "networkRequest", "value": "/api/login" }.',
     inputSchema: pageWaitSchema as unknown as Record<string, unknown>,
     handler: (input) => waitForCondition(ctx, input),
   });
@@ -242,6 +266,22 @@ export function registerTools(ctx: AppContext): ToolRegistry {
       'Assert that a network request matching a URL substring occurred with the expected status (200 or 2xx). Example: { "pageId": "...", "url": "/api/users", "status": 200 }.',
     inputSchema: assertNetworkSchema as unknown as Record<string, unknown>,
     handler: (input) => assertNetwork(ctx, input),
+  });
+
+  registry.register({
+    name: 'session_status',
+    description:
+      'Lightweight live session health check: alive/crashed, recording state, event count, and open pages. Example: { "browserId": "..." }.',
+    inputSchema: sessionStatusSchema as unknown as Record<string, unknown>,
+    handler: (input) => getSessionStatus(ctx, input),
+  });
+
+  registry.register({
+    name: 'session_get',
+    description:
+      'Fetch a persisted session by reportId or sessionId. Wraps dashboard detail query (report + recorded events). Example: { "reportId": "550e8400-e29b-41d4-a716-446655440000" }.',
+    inputSchema: sessionGetSchema as unknown as Record<string, unknown>,
+    handler: (input) => getPersistedSession(ctx, input),
   });
 
   registry.register({

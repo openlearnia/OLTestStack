@@ -25,6 +25,23 @@ describe('wait conditions', () => {
   });
 });
 
+describe('wait schema extensions', () => {
+  test('waitSchema accepts elementHidden and networkRequest', async () => {
+    const { waitSchema } = await import('../../src/domain/waiting/wait.js');
+    expect(waitSchema.safeParse({
+      pageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      condition: 'elementHidden',
+      query: 'Loading',
+    }).success).toBe(true);
+    expect(waitSchema.safeParse({
+      pageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      condition: 'networkRequest',
+      value: '/api/users',
+      status: 200,
+    }).success).toBe(true);
+  });
+});
+
 describe('network-query filters', () => {
   const entries: NetworkEntry[] = [
     {

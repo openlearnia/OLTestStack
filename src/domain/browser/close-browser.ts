@@ -14,6 +14,7 @@ const closeSchema = z
 
 export interface BrowserCloseResult {
   closed: true;
+  reportId?: string;
 }
 
 export async function closeBrowser(
@@ -40,10 +41,13 @@ export async function closeBrowser(
 
   try {
     await ctx.cdp.closeBrowser({ id: browserId, connected: !browser.crashed });
-    await flushRecordingToDatabase(ctx, browserId, testName);
+    const reportId = await flushRecordingToDatabase(ctx, browserId, testName);
     await ctx.registry.deleteBrowser(browserId);
     ctx.recording.releaseBrowser(browserId);
-    return success({ closed: true as const });
+    return success({
+      closed: true as const,
+      ...(reportId ? { reportId } : {}),
+    });
   } catch (error) {
     const mapped = mapCdpError(error, 'browser.close');
     return createError(mapped.code, mapped.message, { ...mapped.details, browserId });

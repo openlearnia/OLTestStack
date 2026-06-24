@@ -94,6 +94,49 @@ export const pageFindSchema = {
   additionalProperties: false,
 } as const;
 
+const findDisambiguationProperties = {
+  preferRegion: {
+    type: 'string',
+    minLength: 1,
+    description: 'Boost elements in this region hint (toolbar, filter, grid-header, grid-body)',
+  },
+  preferRole: {
+    type: 'string',
+    minLength: 1,
+    description: 'Boost elements with this ARIA role',
+  },
+  candidateIndex: {
+    type: 'integer',
+    minimum: 0,
+    description: 'Select the Nth ranked match (0-based) when multiple elements match',
+  },
+} as const;
+
+export const pageClickQuerySchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    query: { type: 'string', minLength: 1 },
+    ...findDisambiguationProperties,
+  },
+  required: ['pageId', 'query'],
+  additionalProperties: false,
+} as const;
+
+export const pageTypeQuerySchema = {
+  type: 'object',
+  properties: {
+    pageId: { type: 'string', format: 'uuid' },
+    query: { type: 'string', minLength: 1 },
+    value: { type: 'string' },
+    ...findDisambiguationProperties,
+    append: { type: 'boolean', default: false },
+    delay: { type: 'integer', minimum: 0, default: 0 },
+  },
+  required: ['pageId', 'query', 'value'],
+  additionalProperties: false,
+} as const;
+
 export const pageClickSchema = {
   type: 'object',
   properties: {
@@ -234,11 +277,18 @@ export const pageWaitSchema = {
     pageId: { type: 'string', format: 'uuid' },
     condition: {
       type: 'string',
-      enum: ['element', 'url', 'networkIdle', 'timeout'],
+      enum: ['element', 'elementHidden', 'url', 'networkIdle', 'networkRequest', 'timeout'],
     },
     query: { type: 'string' },
     value: { type: 'string' },
     match: { type: 'string', enum: ['equals', 'contains'], default: 'contains' },
+    status: {
+      oneOf: [
+        { type: 'integer', minimum: 100, maximum: 599 },
+        { type: 'string', pattern: '^[1-5]xx$' },
+      ],
+      description: 'Expected status for networkRequest condition (default 2xx)',
+    },
     durationMs: { type: 'integer', minimum: 100 },
     timeoutMs: { type: 'integer', minimum: 1000, default: 30000 },
   },
@@ -252,6 +302,7 @@ export const assertExistsSchema = {
     pageId: { type: 'string', format: 'uuid' },
     query: { type: 'string', minLength: 1 },
     elementId: { type: 'string', format: 'uuid' },
+    negate: { type: 'boolean', default: false, description: 'Assert the opposite (element absent, text/url/network not matched)' },
   },
   required: ['pageId'],
   additionalProperties: false,
@@ -267,6 +318,7 @@ export const assertTextSchema = {
       enum: ['contains', 'equals'],
       default: 'contains',
     },
+    negate: { type: 'boolean', default: false },
   },
   required: ['pageId', 'contains'],
   additionalProperties: false,
@@ -282,6 +334,7 @@ export const assertUrlSchema = {
       enum: ['equals', 'contains'],
       default: 'contains',
     },
+    negate: { type: 'boolean', default: false },
   },
   required: ['pageId', 'url'],
   additionalProperties: false,
@@ -299,8 +352,35 @@ export const assertNetworkSchema = {
       ],
       description: 'Exact status code (200) or range (2xx)',
     },
+    negate: { type: 'boolean', default: false },
   },
   required: ['pageId', 'url', 'status'],
+  additionalProperties: false,
+} as const;
+
+export const sessionStatusSchema = {
+  type: 'object',
+  properties: {
+    browserId: { type: 'string', format: 'uuid' },
+  },
+  required: ['browserId'],
+  additionalProperties: false,
+} as const;
+
+export const sessionGetSchema = {
+  type: 'object',
+  properties: {
+    reportId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Persisted test report id (from dashboard or after browser_close)',
+    },
+    sessionId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Alias for reportId',
+    },
+  },
   additionalProperties: false,
 } as const;
 

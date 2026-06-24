@@ -12,6 +12,7 @@ const textSchema = z
     pageId: z.string().uuid(),
     contains: z.string().min(1),
     match: z.enum(['contains', 'equals']).optional(),
+    negate: z.boolean().optional(),
   })
   .strict();
 
@@ -33,7 +34,7 @@ export async function assertText(
     });
   }
 
-  const { pageId, contains, match = 'contains' } = parsed.data;
+  const { pageId, contains, match = 'contains', negate = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -42,7 +43,34 @@ export async function assertText(
   try {
     const pageText = await ctx.cdp.getVisibleText(cdpPage);
 
-    if (matchesText(pageText, contains, match)) {
+    const didMatch = matchesText(pageText, contains, match);
+
+    if (negate) {
+      if (didMatch) {
+        const message =
+          match === 'equals'
+            ? `Page text equals '${contains}'`
+            : `Page text contains '${contains}'`;
+        return assertionFail(ctx, pageResult.page.browserId, pageId, 'text', message, {
+          text: contains,
+          match,
+          negate: true,
+        }, {
+          textSnippet: textSnippet(pageText),
+        });
+      }
+      const message =
+        match === 'equals'
+          ? `Page text does not equal '${contains}'`
+          : `Page text does not contain '${contains}'`;
+      return assertionPass(ctx, pageResult.page.browserId, pageId, 'text', message, {
+        contains,
+        match,
+        negate: true,
+      });
+    }
+
+    if (didMatch) {
       const message =
         match === 'equals'
           ? `Page text equals '${contains}'`

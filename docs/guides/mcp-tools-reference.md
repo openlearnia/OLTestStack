@@ -28,9 +28,10 @@ Complete reference for OLTestStack MCP tools. All tools return a JSON envelope a
 
 | Status | Count | Tools |
 |--------|-------|-------|
-| **Implemented** | 27 | All V1 tools — browser, page, elements, actions, inspection, monitoring, wait, assertions, session_export, save_session, send_report, test_run |
-| **Planned** | 0 | — |
-| **Total (V1)** | 27 | Complete |
+| **Implemented** | 31 | V1 (27) + v1.3 Wave 1: `page_click_query`, `page_type_query`, `session_status`, `session_get`; extensions on `page_wait`, `assert_*`, `browser_close` |
+| **Deferred (Wave 1.5)** | 3 | `page_select`, `page_upload`, `session_list` |
+| **Planned (Wave 2)** | 2 | `page_frame`, `page_cookies` |
+| **Total (v1.3 target)** | ~33 | See [tool-expansion-v1.3.md](../plans/tool-expansion-v1.3.md) |
 
 ---
 
@@ -109,10 +110,13 @@ Close a browser and all its pages. Flushes recordings to PostgreSQL when `PERSIS
 {
   "ok": true,
   "data": {
-    "closed": true
+    "closed": true,
+    "reportId": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
+
+`reportId` is included when persistence is enabled and recorded events were flushed to PostgreSQL.
 
 **Error cases**
 
@@ -476,6 +480,37 @@ Click an interactive element by `elementId`. Scrolls into view and waits for the
 
 ---
 
+### `page_click_query`
+
+Find and click an element atomically by text query. Records the query for `session_export` replay. Prefer over `page_find` + `page_click` for standard flows.
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `query` | string | yes | Find text (visible text, role, aria-label) |
+| `preferRegion` | string | no | Boost region (`toolbar`, `filter`, `grid-header`, `grid-body`) |
+| `preferRole` | string | no | Boost ARIA role |
+| `candidateIndex` | integer (≥0) | no | Select Nth ranked match (default 0) |
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "clicked": true,
+    "elementId": "d4e5f6a7-b8c9-0123-def0-234567890123",
+    "query": "Submit",
+    "matchCount": 1,
+    "selectedReason": "button element"
+  }
+}
+```
+
+---
+
 ### `page_type`
 
 Type text into an input or textarea element. Clears existing value unless `append` is true. When recording is enabled, the optional `query` field (or the query from a prior `page_find`) is stored on the action event for `session_export` replay scripts.
@@ -524,6 +559,25 @@ Type text into an input or textarea element. Clears existing value unless `appen
 | `INTERNAL_ERROR` | CDP type failure |
 
 **Agent workflow:** Target `textbox`, `searchbox`, or `textarea` roles. Use `page_find` with field labels like "Email" or "Password".
+
+---
+
+### `page_type_query`
+
+Find and type into an element atomically by text query. Same disambiguation params as `page_click_query`. Records query for replay.
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `query` | string | yes | Find text |
+| `value` | string | yes | Text to type |
+| `preferRegion` | string | no | Region boost |
+| `preferRole` | string | no | Role boost |
+| `candidateIndex` | integer (≥0) | no | Nth match |
+| `append` | boolean | no | Append mode |
+| `delay` | integer | no | Keystroke delay ms |
 
 ---
 
@@ -927,17 +981,18 @@ Return captured browser console messages (logs, warnings, errors). Monitoring st
 
 ### `page_wait`
 
-Wait for a condition: element appearance, URL match, network idle, or fixed timeout.
+Wait for a condition: element, element hidden, URL, network idle, network request, or fixed timeout.
 
 **Input schema**
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `pageId` | string (UUID) | yes | — | Target page |
-| `condition` | enum | yes | — | `"element"` \| `"url"` \| `"networkIdle"` \| `"timeout"` |
-| `query` | string | when `element` | — | Element search query (same as `page_find`) |
-| `value` | string | when `url` | — | Expected URL or substring |
-| `match` | enum | no | `"contains"` | `"equals"` \| `"contains"` (URL condition only) |
+| `condition` | enum | yes | — | `"element"` \| `"elementHidden"` \| `"url"` \| `"networkIdle"` \| `"networkRequest"` \| `"timeout"` |
+| `query` | string | when `element` / `elementHidden` | — | Element search query |
+| `value` | string | when `url` / `networkRequest` | — | URL substring |
+| `match` | enum | no | `"contains"` | `"equals"` \| `"contains"` (URL only) |
+| `status` | int or `2xx` | no | `2xx` | Expected status for `networkRequest` |
 | `durationMs` | integer (≥100) | when `timeout` | — | Fixed wait duration |
 | `timeoutMs` | integer (≥1000) | no | `30000` | Max wait time for polling conditions |
 
@@ -1002,6 +1057,7 @@ Assert that an element matching a query exists and is visible, or that a known `
 | `pageId` | string (UUID) | yes | Target page |
 | `query` | string (min 1 char) | one of query/elementId | Text query (same semantics as `page_find`) |
 | `elementId` | string (UUID) | one of query/elementId | Previously discovered element |
+| `negate` | boolean | no | When `true`, pass if element is absent or hidden |
 
 **Example input**
 
@@ -1047,6 +1103,7 @@ Assert that visible page text contains or equals a string (same source as `page_
 | `pageId` | string (UUID) | yes | — |
 | `contains` | string (min 1 char) | yes | — |
 | `match` | enum | no | `"contains"` |
+| `negate` | boolean | no | `false` — pass when text does not match |
 
 `match` values: `"contains"` \| `"equals"`
 
@@ -1093,6 +1150,7 @@ Assert that the current page URL contains or equals an expected value.
 | `pageId` | string (UUID) | yes | — |
 | `url` | string (min 1 char) | yes | — |
 | `match` | enum | no | `"contains"` |
+| `negate` | boolean | no | `false` — pass when URL does not match |
 
 **Example input**
 
@@ -1137,6 +1195,7 @@ Assert that a network request matching a URL substring occurred with the expecte
 | `pageId` | string (UUID) | yes | Target page |
 | `url` | string (min 1 char) | yes | URL substring to match |
 | `status` | integer or string | yes | Exact code (200) or range (`2xx`) |
+| `negate` | boolean | no | `false` — pass when no matching request |
 
 **Example input**
 
@@ -1173,6 +1232,22 @@ Assert that a network request matching a URL substring occurred with the expecte
 | `INVALID_INPUT` | Invalid status format |
 | `SESSION_NOT_FOUND` | Page not found |
 | `ASSERTION_FAILED` | No matching request in buffer |
+
+---
+
+### `session_status`
+
+Lightweight live session health check without dumping full state.
+
+**Input:** `{ "browserId": "..." }`
+
+**Output:** `{ browserId, alive, crashed, recording, eventCount, pages: [{ pageId, url, title }] }`
+
+---
+
+### `session_get`
+
+Fetch a persisted session by `reportId` or `sessionId`. Returns report metadata and recorded events (same shape as dashboard detail API). Requires `DATABASE_URL`.
 
 ---
 

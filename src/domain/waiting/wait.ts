@@ -11,15 +11,24 @@ import {
   matchesQuery,
 } from '../elements/element-matcher.js';
 import { resolvePageSession, toCdpPage } from '../shared/resolve-page.js';
+import { findMatchingNetworkRequest } from '../assertions/match-utils.js';
 import { isNetworkIdle, matchesUrl, WAIT_POLL_MS } from './conditions.js';
 
 const waitSchema = z
   .object({
     pageId: z.string().uuid(),
-    condition: z.enum(['element', 'url', 'networkIdle', 'timeout']),
+    condition: z.enum([
+      'element',
+      'elementHidden',
+      'url',
+      'networkIdle',
+      'networkRequest',
+      'timeout',
+    ]),
     query: z.string().min(1).optional(),
     value: z.string().min(1).optional(),
     match: z.enum(['equals', 'contains']).optional(),
+    status: z.union([z.number().int(), z.string()]).optional(),
     durationMs: z.number().int().min(100).optional(),
     timeoutMs: z.number().int().min(1000).optional(),
   })
@@ -49,16 +58,16 @@ export async function waitForCondition(
     });
   }
 
-  const { pageId, condition, query, value, match, durationMs, timeoutMs } = parsed.data;
+  const { pageId, condition, query, value, match, status, durationMs, timeoutMs } = parsed.data;
 
-  if (condition === 'element' && !query) {
-    return createError('INVALID_INPUT', 'query is required when condition is element', {
+  if ((condition === 'element' || condition === 'elementHidden') && !query) {
+    return createError('INVALID_INPUT', `query is required when condition is ${condition}`, {
       field: 'query',
       condition,
     });
   }
-  if (condition === 'url' && !value) {
-    return createError('INVALID_INPUT', 'value is required when condition is url', {
+  if ((condition === 'url' || condition === 'networkRequest') && !value) {
+    return createError('INVALID_INPUT', `value is required when condition is ${condition}`, {
       field: 'value',
       condition,
     });
@@ -102,6 +111,17 @@ export async function waitForCondition(
         }
       }
 
+      if (condition === 'elementHidden') {
+        const matched = await findMatchingElement(ctx, cdpPage, query!);
+        if (!matched) {
+          return success({
+            satisfied: true as const,
+            condition,
+            elapsedMs: Date.now() - startMs,
+          });
+        }
+      }
+
       if (condition === 'url') {
         const currentUrl = await ctx.cdp.getUrl(cdpPage);
         if (matchesUrl(currentUrl, value!, match ?? 'contains')) {
@@ -126,6 +146,23 @@ export async function waitForCondition(
           });
         }
       }
+
+      if (condition === 'networkRequest') {
+        const entries = ctx.cdp.getNetworkEntries(cdpPage);
+        const networkMatch = findMatchingNetworkRequest(
+          entries,
+          value!,
+          status ?? '2xx',
+        );
+        if (networkMatch) {
+          return success({
+            satisfied: true as const,
+            condition,
+            elapsedMs: Date.now() - startMs,
+            url: networkMatch.url,
+          });
+        }
+      }
     } catch (error) {
       const mapped = mapCdpError(error, 'page.wait');
       return createError(mapped.code, mapped.message, { ...mapped.details, pageId, condition });
@@ -135,12 +172,17 @@ export async function waitForCondition(
   }
 
   const elapsedMs = Date.now() - startMs;
+  const timeoutMsValue = timeoutMs ?? ctx.config.defaultWaitTimeoutMs;
   const timeoutMessage =
     condition === 'element'
-      ? `Element matching '${query}' did not appear within ${timeoutMs ?? ctx.config.defaultWaitTimeoutMs}ms.`
-      : condition === 'url'
-        ? `URL did not match '${value}' within ${timeoutMs ?? ctx.config.defaultWaitTimeoutMs}ms.`
-        : `Network did not become idle within ${timeoutMs ?? ctx.config.defaultWaitTimeoutMs}ms.`;
+      ? `Element matching '${query}' did not appear within ${timeoutMsValue}ms.`
+      : condition === 'elementHidden'
+        ? `Element matching '${query}' did not become hidden within ${timeoutMsValue}ms.`
+        : condition === 'url'
+          ? `URL did not match '${value}' within ${timeoutMsValue}ms.`
+          : condition === 'networkRequest'
+            ? `Network request matching '${value}' did not occur within ${timeoutMsValue}ms.`
+            : `Network did not become idle within ${timeoutMsValue}ms.`;
 
   return createError('TIMEOUT', timeoutMessage, { pageId, condition, elapsedMs });
 }

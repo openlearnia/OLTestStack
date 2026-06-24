@@ -72,6 +72,26 @@ describe('assertion match-utils', () => {
   });
 });
 
+describe('assertion negate', () => {
+  test('assertText schema accepts negate flag', async () => {
+    const { textSchema } = await import('../../src/domain/assertions/text.js');
+    expect(textSchema.safeParse({
+      pageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      contains: 'Welcome',
+      negate: true,
+    }).success).toBe(true);
+  });
+
+  test('assertExists schema accepts negate flag', async () => {
+    const { existsSchema } = await import('../../src/domain/assertions/exists.js');
+    expect(existsSchema.safeParse({
+      pageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      query: 'Submit',
+      negate: true,
+    }).success).toBe(true);
+  });
+});
+
 describe('generateReport', () => {
   const events: RecordedEvent[] = [
     {

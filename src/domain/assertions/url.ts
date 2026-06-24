@@ -12,6 +12,7 @@ const urlSchema = z
     pageId: z.string().uuid(),
     url: z.string().min(1),
     match: z.enum(['equals', 'contains']).optional(),
+    negate: z.boolean().optional(),
   })
   .strict();
 
@@ -33,7 +34,7 @@ export async function assertUrl(
     });
   }
 
-  const { pageId, url, match = 'contains' } = parsed.data;
+  const { pageId, url, match = 'contains', negate = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
@@ -43,7 +44,36 @@ export async function assertUrl(
     const currentUrl = await ctx.cdp.getUrl(cdpPage);
     await ctx.registry.updatePage(pageId, { url: currentUrl });
 
-    if (matchesUrl(currentUrl, url, match)) {
+    const didMatch = matchesUrl(currentUrl, url, match);
+
+    if (negate) {
+      if (didMatch) {
+        const message =
+          match === 'equals'
+            ? `URL equals '${url}'`
+            : `URL contains '${url}'`;
+        return assertionFail(
+          ctx,
+          pageResult.page.browserId,
+          pageId,
+          'url',
+          message,
+          { url, match, negate: true },
+          { url: currentUrl },
+        );
+      }
+      const message =
+        match === 'equals'
+          ? `URL '${currentUrl}' does not equal '${url}'`
+          : `URL '${currentUrl}' does not contain '${url}'`;
+      return assertionPass(ctx, pageResult.page.browserId, pageId, 'url', message, {
+        url,
+        match,
+        negate: true,
+      });
+    }
+
+    if (didMatch) {
       const message =
         match === 'equals'
           ? `URL equals '${url}'`

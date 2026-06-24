@@ -15,6 +15,7 @@ const networkSchema = z
     pageId: z.string().uuid(),
     url: z.string().min(1),
     status: z.union([z.number().int(), z.string()]),
+    negate: z.boolean().optional(),
   })
   .strict()
   .refine((data) => isValidNetworkStatusInput(data.status), {
@@ -26,7 +27,11 @@ export interface AssertNetworkPassResult {
   passed: true;
   assertion: 'network';
   message: string;
-  matchedRequest: {
+  url?: string;
+  status?: number | string;
+  negate?: boolean;
+  matchingRequests?: number;
+  matchedRequest?: {
     url: string;
     status: number;
     method: string;
@@ -45,23 +50,49 @@ export async function assertNetwork(
     });
   }
 
-  const { pageId, url, status } = parsed.data;
+  const { pageId, url, status, negate = false } = parsed.data;
   const pageResult = await resolvePageSession(ctx, pageId);
   if ('error' in pageResult) return pageResult.error;
 
   const cdpPage = toCdpPage(pageResult.page);
   const entries = ctx.cdp.getNetworkEntries(cdpPage);
-  const match = findMatchingNetworkRequest(entries, url, status);
+  const networkMatch = findMatchingNetworkRequest(entries, url, status);
 
-  if (match) {
-    const message = `Network request to '${match.url}' returned status ${match.status}`;
+  if (negate) {
+    if (networkMatch) {
+      const message = `Network request to '${networkMatch.url}' returned status ${networkMatch.status}`;
+      return assertionFail(ctx, pageResult.page.browserId, pageId, 'network', message, {
+        url,
+        status,
+        negate: true,
+      }, {
+        matchedRequest: {
+          url: networkMatch.url,
+          status: networkMatch.status,
+          method: networkMatch.method,
+        },
+      });
+    }
+
+    const partialMatches = countPartialUrlMatches(entries, url);
+    const message = `No network request matching url '${url}' with status ${status}`;
+    return assertionPass(ctx, pageResult.page.browserId, pageId, 'network', message, {
+      url,
+      status,
+      negate: true,
+      matchingRequests: partialMatches,
+    });
+  }
+
+  if (networkMatch) {
+    const message = `Network request to '${networkMatch.url}' returned status ${networkMatch.status}`;
     return assertionPass(ctx, pageResult.page.browserId, pageId, 'network', message, {
       url,
       status,
       matchedRequest: {
-        url: match.url,
-        status: match.status,
-        method: match.method,
+        url: networkMatch.url,
+        status: networkMatch.status,
+        method: networkMatch.method,
       },
     });
   }
