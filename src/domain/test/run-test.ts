@@ -11,6 +11,10 @@ import { executeStep } from './step-executor.js';
 import type { TestStep } from './step-types.js';
 import { testStepSchema } from './step-schema.js';
 import { loadSessionScriptFromFile, sessionScriptSchema } from '../recording/load-script.js';
+import {
+  substituteVariablesInSteps,
+  substituteVariablesInUrl,
+} from '../recording/resolve-variables.js';
 import { z } from 'zod';
 
 const testRunSchema = z
@@ -21,6 +25,7 @@ const testRunSchema = z
     steps: z.array(testStepSchema).optional(),
     script: sessionScriptSchema.optional(),
     scriptFile: z.string().min(1).optional(),
+    variables: z.record(z.string(), z.string()).optional(),
     headless: z.boolean().optional(),
     stopOnFailure: z.boolean().optional(),
     timeoutMs: z.number().int().min(5000).optional(),
@@ -59,6 +64,7 @@ export async function runTest(
     steps: inputSteps,
     script,
     scriptFile,
+    variables,
     headless,
     stopOnFailure = true,
     timeoutMs = 60_000,
@@ -85,6 +91,20 @@ export async function runTest(
     resolvedSteps = script.steps;
     resolvedUrl = resolvedUrl ?? script.url;
     resolvedName = resolvedName ?? script.name;
+  }
+
+  if (variables && Object.keys(variables).length > 0) {
+    if (resolvedSteps) {
+      const substitutedSteps = substituteVariablesInSteps(resolvedSteps, variables);
+      if (!Array.isArray(substitutedSteps)) return substitutedSteps;
+      resolvedSteps = substitutedSteps;
+    }
+
+    if (resolvedUrl) {
+      const substitutedUrl = substituteVariablesInUrl(resolvedUrl, variables);
+      if (typeof substitutedUrl !== 'string') return substitutedUrl;
+      resolvedUrl = substitutedUrl;
+    }
   }
 
   if (!resolvedSteps || resolvedSteps.length === 0) {

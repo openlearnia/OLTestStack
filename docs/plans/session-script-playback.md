@@ -135,11 +135,11 @@ Or inline:
 ## Limitations (MVP)
 
 1. **Stale elementIds** — if the element registry was invalidated (navigation/reload) before export, click/type steps may be skipped.
-2. **No variables** — typed values are literal strings; no `${username}` substitution yet.
-3. **No timing** — recorded timestamps are not replayed; no wait steps auto-inserted between actions.
+2. **Single page** — `test_run` uses one page; multi-tab sessions are not replayed faithfully.
+3. **Filesystem scripts** — `scriptFile` reads from the MCP server host, not the Cursor client.
 4. **Evidence-only events** — network/console/error events are not converted to steps.
-5. **Single page** — `test_run` uses one page; multi-tab sessions are not replayed faithfully.
-6. **Filesystem scripts** — `scriptFile` reads from the MCP server host, not the Cursor client.
+
+**V1.2 additions:** query capture at record time, `${VAR_NAME}` variable substitution in `test_run`, and auto-inserted wait steps on export (from event timestamps).
 
 ---
 
@@ -147,8 +147,8 @@ Or inline:
 
 | Phase | Scope |
 |-------|-------|
-| **V1.1 MVP (now)** | `session_export`, `test_run` + `script`/`scriptFile`, `.olteststack.json` format, example script |
-| **V1.2** | Store `query` in action recording at emit time; variable substitution |
+| **V1.1 MVP** | `session_export`, `test_run` + `script`/`scriptFile`, `.olteststack.json` format, example script |
+| **V1.2 (done)** | Store `query` in action recording at emit time; variable substitution; auto-insert wait steps on export |
 | **V2** | Full session replay with timing, multi-page, HAR/network assertions from buffer, script diff |
 
 ---
@@ -173,6 +173,7 @@ Or inline:
 |------|---------|
 | `src/domain/recording/script-types.ts` | `SessionScript` type |
 | `src/domain/recording/events-to-script.ts` | Event → step converter |
+| `src/domain/recording/resolve-variables.ts` | `${VAR_NAME}` substitution for script replay |
 | `src/domain/recording/session-export.ts` | `session_export` handler |
 | `src/domain/recording/load-script.ts` | Load/validate script files |
 | `src/domain/test/step-schema.ts` | Shared Zod step schema |

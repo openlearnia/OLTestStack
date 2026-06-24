@@ -1299,6 +1299,7 @@ Execute a complete browser test with explicit steps, an inline script, or a scri
 | `steps` | array | no | — | Explicit step sequence |
 | `script` | object | no | — | Inline `.olteststack.json` replay script |
 | `scriptFile` | string | no | — | Path to script file on MCP server host |
+| `variables` | object (string → string) | no | — | Values for `${VAR_NAME}` placeholders in steps and `url` |
 | `headless` | boolean | no | `true` | Browser headless mode |
 | `stopOnFailure` | boolean | no | `true` | Halt on first step failure |
 | `timeoutMs` | integer (≥5000) | no | `60000` | Overall test timeout |
@@ -1329,6 +1330,34 @@ Execute a complete browser test with explicit steps, an inline script, or a scri
   "scriptFile": "scripts/example-login.olteststack.json"
 }
 ```
+
+**Example input (script replay with variables)**
+
+Scripts may use `${VAR_NAME}` placeholders in `url`, step `value` fields, navigate URLs, and assertion strings. Supply values via `variables`:
+
+```json
+{
+  "goal": "Replay login against staging",
+  "variables": {
+    "BASE_URL": "https://staging.example.com",
+    "EMAIL": "user@example.com",
+    "PASSWORD": "secret"
+  },
+  "script": {
+    "version": "1.0",
+    "name": "Login flow",
+    "url": "${BASE_URL}/login",
+    "steps": [
+      { "action": "type", "query": "Email", "value": "${EMAIL}" },
+      { "action": "type", "query": "Password", "value": "${PASSWORD}" },
+      { "action": "click", "query": "Sign In" },
+      { "action": "assert.url", "url": "/dashboard", "match": "contains" }
+    ]
+  }
+}
+```
+
+Escape a literal `${...}` in script text with `$$` (e.g. `$${PRICE}` stays `${PRICE}`). Missing variables return `INVALID_INPUT` with the variable name.
 
 **Example output**
 

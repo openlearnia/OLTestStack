@@ -420,6 +420,12 @@ export const testRunSchema = {
       type: 'string',
       description: 'Path to a .olteststack.json replay script on the MCP server filesystem.',
     },
+    variables: {
+      type: 'object',
+      description:
+        'Variable map for ${VAR_NAME} substitution in step strings and url before execution.',
+      additionalProperties: { type: 'string' },
+    },
     headless: { type: 'boolean', default: true },
     stopOnFailure: { type: 'boolean', default: true },
     timeoutMs: { type: 'integer', minimum: 5000, default: 60000 },

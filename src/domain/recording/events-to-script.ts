@@ -4,6 +4,15 @@ import { elementToQuery } from '../elements/element-query.js';
 import type { TestStep } from '../test/step-types.js';
 import { SESSION_SCRIPT_VERSION, type SessionScript } from './script-types.js';
 
+const GAP_THRESHOLD_MS = 300;
+const MAX_INSERTED_WAIT_MS = 5000;
+const MIN_TIMEOUT_WAIT_MS = 100;
+
+interface TimestampedStep {
+  step: TestStep;
+  timestamp: string;
+}
+
 async function resolveQueryFromElementId(
   ctx: AppContext,
   pageId: string | undefined,
@@ -32,7 +41,7 @@ export async function eventsToScript(
   },
 ): Promise<SessionScript> {
   const warnings: string[] = [];
-  const steps: TestStep[] = [];
+  const stampedSteps: TimestampedStep[] = [];
   let startUrl: string | undefined;
 
   for (const event of events) {
@@ -44,7 +53,7 @@ export async function eventsToScript(
           break;
         }
         if (!startUrl) startUrl = url;
-        steps.push({ action: 'navigate', url });
+        stampedSteps.push({ step: { action: 'navigate', url }, timestamp: event.timestamp });
         break;
       }
 
@@ -66,7 +75,7 @@ export async function eventsToScript(
               );
               break;
             }
-            steps.push({ action: 'click', query });
+            stampedSteps.push({ step: { action: 'click', query }, timestamp: event.timestamp });
             break;
           }
 
@@ -85,7 +94,7 @@ export async function eventsToScript(
               );
               break;
             }
-            steps.push({ action: 'type', query, value });
+            stampedSteps.push({ step: { action: 'type', query, value }, timestamp: event.timestamp });
             break;
           }
 
@@ -95,7 +104,7 @@ export async function eventsToScript(
               warnings.push(`Skipped press at ${event.timestamp}: missing key`);
               break;
             }
-            steps.push({ action: 'press', key });
+            stampedSteps.push({ step: { action: 'press', key }, timestamp: event.timestamp });
             break;
           }
 
@@ -105,7 +114,7 @@ export async function eventsToScript(
               warnings.push(`Skipped scroll at ${event.timestamp}: invalid direction`);
               break;
             }
-            steps.push({ action: 'scroll', direction });
+            stampedSteps.push({ step: { action: 'scroll', direction }, timestamp: event.timestamp });
             break;
           }
 
@@ -131,7 +140,7 @@ export async function eventsToScript(
               warnings.push(`Skipped assert.exists at ${event.timestamp}: could not resolve query`);
               break;
             }
-            steps.push({ action: 'assert.exists', query });
+            stampedSteps.push({ step: { action: 'assert.exists', query }, timestamp: event.timestamp });
             break;
           }
 
@@ -149,7 +158,10 @@ export async function eventsToScript(
                 : ((event.payload.expected as Record<string, unknown> | undefined)?.match === 'equals'
                     ? 'equals'
                     : 'contains');
-            steps.push({ action: 'assert.text', contains, match });
+            stampedSteps.push({
+              step: { action: 'assert.text', contains, match },
+              timestamp: event.timestamp,
+            });
             break;
           }
 
@@ -167,7 +179,10 @@ export async function eventsToScript(
                 : ((event.payload.expected as Record<string, unknown> | undefined)?.match === 'equals'
                     ? 'equals'
                     : 'contains');
-            steps.push({ action: 'assert.url', url, match });
+            stampedSteps.push({
+              step: { action: 'assert.url', url, match },
+              timestamp: event.timestamp,
+            });
             break;
           }
 
@@ -183,10 +198,13 @@ export async function eventsToScript(
               warnings.push(`Skipped assert.network at ${event.timestamp}: missing url or status`);
               break;
             }
-            steps.push({
-              action: 'assert.network',
-              url,
-              status: typeof status === 'number' || typeof status === 'string' ? status : String(status),
+            stampedSteps.push({
+              step: {
+                action: 'assert.network',
+                url,
+                status: typeof status === 'number' || typeof status === 'string' ? status : String(status),
+              },
+              timestamp: event.timestamp,
             });
             break;
           }
@@ -198,9 +216,12 @@ export async function eventsToScript(
       }
 
       case 'screenshot': {
-        steps.push({
-          action: 'screenshot',
-          fullPage: event.payload.fullPage === true,
+        stampedSteps.push({
+          step: {
+            action: 'screenshot',
+            fullPage: event.payload.fullPage === true,
+          },
+          timestamp: event.timestamp,
         });
         break;
       }
@@ -212,7 +233,8 @@ export async function eventsToScript(
     }
   }
 
-  const dedupedSteps = dedupeInitialNavigate(steps, startUrl);
+  const stepsWithWaits = insertWaitSteps(stampedSteps);
+  const dedupedSteps = dedupeInitialNavigate(stepsWithWaits, startUrl);
 
   return {
     version: SESSION_SCRIPT_VERSION,
@@ -224,6 +246,41 @@ export async function eventsToScript(
     steps: dedupedSteps,
     ...(warnings.length > 0 ? { exportWarnings: warnings } : {}),
   };
+}
+
+function insertWaitSteps(entries: TimestampedStep[]): TestStep[] {
+  const steps: TestStep[] = [];
+
+  for (let index = 0; index < entries.length; index++) {
+    const current = entries[index];
+    const previous = index > 0 ? entries[index - 1] : undefined;
+
+    if (previous) {
+      const gapMs =
+        new Date(current.timestamp).getTime() - new Date(previous.timestamp).getTime();
+      if (gapMs > GAP_THRESHOLD_MS) {
+        const waitStep = buildWaitStep(previous.step, gapMs);
+        if (waitStep) steps.push(waitStep);
+      }
+    }
+
+    steps.push(current.step);
+  }
+
+  return steps;
+}
+
+function buildWaitStep(previousStep: TestStep, gapMs: number): TestStep | null {
+  if (previousStep.action === 'navigate') {
+    return { action: 'wait', condition: 'networkIdle' };
+  }
+
+  if (previousStep.action === 'click') {
+    const durationMs = Math.min(Math.max(gapMs, MIN_TIMEOUT_WAIT_MS), MAX_INSERTED_WAIT_MS);
+    return { action: 'wait', condition: 'timeout', durationMs };
+  }
+
+  return null;
 }
 
 function dedupeInitialNavigate(steps: TestStep[], startUrl: string | undefined): TestStep[] {
