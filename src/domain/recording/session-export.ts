@@ -2,16 +2,25 @@ import type { AppContext } from '../../core/context.js';
 import { createError, success } from '../../core/errors/envelope.js';
 import type { McpErrorResponse, McpSuccessResponse } from '../../core/types/responses.js';
 import { z } from 'zod';
+import { exportSessionFromDatabase } from './export-from-db.js';
 import { eventsToScript } from './events-to-script.js';
 import type { SessionExportResult } from './script-types.js';
 
 const sessionExportSchema = z
   .object({
-    browserId: z.string().uuid(),
+    browserId: z.string().uuid().optional(),
+    reportId: z.string().uuid().optional(),
+    sessionId: z.string().uuid().optional(),
     name: z.string().optional(),
     goal: z.string().optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => data.browserId ?? data.reportId ?? data.sessionId, {
+    message: 'browserId, reportId, or sessionId is required',
+  })
+  .refine((data) => !(data.browserId && (data.reportId || data.sessionId)), {
+    message: 'Provide browserId (live session) or reportId/sessionId (database), not both',
+  });
 
 export async function exportSession(
   ctx: AppContext,
@@ -25,29 +34,36 @@ export async function exportSession(
     });
   }
 
-  const { browserId, name, goal } = parsed.data;
-  const browser = await ctx.registry.getBrowser(browserId);
+  const { browserId, reportId, sessionId, name, goal } = parsed.data;
+  const persistedReportId = reportId ?? sessionId;
+
+  if (persistedReportId) {
+    return exportSessionFromDatabase(ctx, persistedReportId, { name, goal });
+  }
+
+  const liveBrowserId = browserId!;
+  const browser = await ctx.registry.getBrowser(liveBrowserId);
   if (!browser) {
     return createError(
       'SESSION_NOT_FOUND',
-      `Browser session '${browserId}' not found. Call browser_launch first.`,
-      { browserId },
+      `Browser session '${liveBrowserId}' not found. Call browser_launch first, or pass reportId after browser_close.`,
+      { browserId: liveBrowserId },
     );
   }
 
-  if (!ctx.recording.isEnabled(browserId)) {
+  if (!ctx.recording.isEnabled(liveBrowserId)) {
     return createError(
       'INVALID_INPUT',
       'Recording is disabled for this browser session. Launch with recordingEnabled: true.',
-      { browserId },
+      { browserId: liveBrowserId },
     );
   }
 
-  const events = ctx.recording.getEvents(browserId);
+  const events = ctx.recording.getEvents(liveBrowserId);
   const script = await eventsToScript(ctx, events, {
-    name: name ?? `session-${browserId.slice(0, 8)}`,
+    name: name ?? `session-${liveBrowserId.slice(0, 8)}`,
     goal,
-    browserId,
+    browserId: liveBrowserId,
   });
 
   return success({

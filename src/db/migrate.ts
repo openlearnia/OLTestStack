@@ -8,12 +8,17 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-const db = createDbClient(databaseUrl);
+const { db, close } = createDbClient(databaseUrl);
 
+let exitCode = 0;
 try {
   await migrate(db, { migrationsFolder: './drizzle' });
   console.error('[olteststack] Database migrations applied successfully');
 } catch (error) {
   console.error('[olteststack] Migration failed:', error);
-  process.exit(1);
+  exitCode = 1;
+} finally {
+  await close();
 }
+
+process.exit(exitCode);

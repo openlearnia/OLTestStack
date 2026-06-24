@@ -8,9 +8,20 @@ export type Database = PostgresJsDatabase<typeof schema>;
 let sqlClient: ReturnType<typeof postgres> | undefined;
 let dbInstance: Database | undefined;
 
-export function createDbClient(databaseUrl: string): Database {
-  const client = postgres(databaseUrl, { max: 10 });
-  return drizzle(client, { schema });
+export interface DbClientHandle {
+  db: Database;
+  close: () => Promise<void>;
+}
+
+/** One-shot client for scripts (migrate, cleanup) — always call `close()` before exit. */
+export function createDbClient(databaseUrl: string): DbClientHandle {
+  const client = postgres(databaseUrl, { max: 1 });
+  return {
+    db: drizzle(client, { schema }),
+    close: async () => {
+      await client.end({ timeout: 5 });
+    },
+  };
 }
 
 export function getDb(config: ResolvedConfig): Database | undefined {

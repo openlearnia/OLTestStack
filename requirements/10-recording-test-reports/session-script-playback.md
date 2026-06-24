@@ -19,7 +19,7 @@ Export a live browser session's recording buffer as a replayable `.olteststack.j
 | FR-10-022 | `test_run` SHALL accept an inline `script` object or a `scriptFile` path for playback without requiring an explicit `steps` array. |
 | FR-10-023 | Event-to-step conversion SHALL map `navigation`, `action`, `assertion`, and `screenshot` events to executable steps; evidence-only events (`network`, `console`, `error`) SHALL be omitted. |
 | FR-10-024 | Click/type export SHALL resolve queries from the element registry when recordings contain only `elementId`; unresolvable steps SHALL be skipped with warnings. |
-| FR-10-025 | `session_export` SHALL be callable only while the browser session is open (before `browser_close`). |
+| FR-10-025 | `session_export` SHALL accept `browserId` for live export, or `reportId`/`sessionId` to rebuild from PostgreSQL `recorded_events` after `browser_close`. |
 
 ---
 
@@ -31,9 +31,13 @@ Export a live browser session's recording buffer as a replayable `.olteststack.j
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `browserId` | UUID string | yes | Active browser session |
+| `browserId` | UUID string | one of* | Active browser session (live buffer) |
+| `reportId` | UUID string | one of* | Persisted report id (post-close DB export) |
+| `sessionId` | UUID string | one of* | Alias for `reportId` |
 | `name` | string | no | Script name |
 | `goal` | string | no | Natural-language goal metadata |
+
+\* Exactly one of `browserId` or `reportId`/`sessionId`.
 
 **Output**
 
@@ -65,6 +69,7 @@ Additional input fields:
 | AC-10-021 | `test_run` with `scriptFile` pointing to a valid script executes steps and returns a `TestReport`. |
 | AC-10-022 | Export skips unresolvable elementId-only actions and lists warnings in `exportWarnings`. |
 | AC-10-023 | Goal-only `test_run` (no steps/script/scriptFile) still returns agent-driven guidance. |
+| AC-10-024 | After `browser_close`, `session_export` with `reportId` rebuilds a script from `recorded_events`. |
 
 ---
 
@@ -73,7 +78,11 @@ Additional input fields:
 - Variable substitution in script values
 - Replay timing / wait insertion from timestamps
 - Multi-page / multi-tab replay
-- Export from Postgres (post-close) — live buffer only
+
+## V1.2 additions
+
+- Export from Postgres via `reportId`/`sessionId` (post-close)
+- Auto-save failed sessions when `AUTO_SAVE_FAILED=true` (default true when `DATABASE_URL` is set)
 
 ---
 

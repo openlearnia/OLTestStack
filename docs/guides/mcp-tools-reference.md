@@ -85,19 +85,21 @@ Launch a new Chromium browser instance.
 
 ### `browser_close`
 
-Close a browser and all its pages. Flushes recordings to PostgreSQL when `PERSIST_RECORDING=true`.
+Close a browser and all its pages. Flushes recordings to PostgreSQL when `PERSIST_RECORDING=true` (default when `DATABASE_URL` is set). Unsaved sessions expire after `SESSION_TTL_HOURS` (default 24h). Failed or error sessions are auto-promoted to **saved** (no TTL) when `AUTO_SAVE_FAILED=true` or `AUTO_SAVE_FAILED_SESSIONS=true` (also default when `DATABASE_URL` is set). Applies to manual close and `test_run` cleanup.
 
 **Input schema**
 
-| Field | Type | Required |
-|-------|------|----------|
-| `browserId` | string (UUID) | yes |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `browserId` | string (UUID) | yes | Active browser session |
+| `testName` | string | no | Optional report name when persisting to PostgreSQL |
 
 **Example input**
 
 ```json
 {
-  "browserId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  "browserId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "testName": "Login regression"
 }
 ```
 
@@ -1176,23 +1178,39 @@ Assert that a network request matching a URL substring occurred with the expecte
 
 ### `session_export`
 
-Export the current browser session recording as a replayable `.olteststack.json` script. Call **before** `browser_close` while the session is still open.
+Export a browser session recording as a replayable `.olteststack.json` script.
+
+- **Live session:** pass `browserId` while the browser is still open (in-memory buffer).
+- **After close:** pass `reportId` or `sessionId` to rebuild the script from PostgreSQL `recorded_events` (requires `DATABASE_URL` and persistence enabled).
 
 **Input schema**
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `browserId` | string (UUID) | yes | — | Active browser session |
-| `name` | string | no | `session-<prefix>` | Script name |
+| `browserId` | string (UUID) | one of* | — | Active browser session (live buffer) |
+| `reportId` | string (UUID) | one of* | — | Persisted report id (post-close DB export) |
+| `sessionId` | string (UUID) | one of* | — | Alias for `reportId` |
+| `name` | string | no | `session-<prefix>` or test name | Script name |
 | `goal` | string | no | — | Natural-language goal stored in script metadata |
 
-**Example input**
+\* Provide exactly one of `browserId` (live) or `reportId`/`sessionId` (database).
+
+**Example input (live)**
 
 ```json
 {
   "browserId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "name": "Login flow",
   "goal": "Verify login redirects to dashboard"
+}
+```
+
+**Example input (post-close)**
+
+```json
+{
+  "reportId": "550e8400-e29b-41d4-a716-446655440000",
+  "goal": "Replay failed login from dashboard"
 }
 ```
 
@@ -1225,10 +1243,60 @@ Export the current browser session recording as a replayable `.olteststack.json`
 
 | Code | When |
 |------|------|
-| `SESSION_NOT_FOUND` | Browser not found or already closed |
-| `INVALID_INPUT` | Recording disabled for session |
+| `SESSION_NOT_FOUND` | Browser not found (live), or `reportId`/`sessionId` not in database |
+| `INVALID_INPUT` | Recording disabled (live), no identifiers, mixed live/db inputs, or no `recorded_events` for report |
+| `INTERNAL_ERROR` | Database export requested but persistence disabled or DB unavailable |
 
-**Note:** Save `data.script` to a `.olteststack.json` file (e.g. under `scripts/`) for replay via `test_run`.
+**Note:** Save `data.script` to a `.olteststack.json` file (e.g. under `scripts/`) for replay via `test_run`. After `browser_close`, use the persisted `reportId` from the dashboard with `reportId` or `sessionId`.
+
+---
+
+### `save_session`
+
+Promote an ephemeral persisted session to **saved** (no TTL). Unsaved sessions are auto-deleted after `SESSION_TTL_HOURS` unless saved manually or auto-promoted on failed/error close (see `AUTO_SAVE_FAILED` / `AUTO_SAVE_FAILED_SESSIONS`).
+
+**Input schema**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reportId` | string (UUID) | one of* | Persisted test report id |
+| `sessionId` | string (UUID) | one of* | Alias for `reportId` |
+| `name` | string | no | Optional display name update |
+
+\* Provide `reportId` or `sessionId`.
+
+**Example input**
+
+```json
+{
+  "reportId": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Login regression"
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "reportId": "550e8400-e29b-41d4-a716-446655440000",
+    "testName": "Login regression",
+    "saved": true,
+    "savedAt": "2026-06-21T10:05:00.000Z",
+    "expiresAt": null,
+    "expiresInHours": null
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `SESSION_NOT_FOUND` | Report id not in database |
+| `INVALID_INPUT` | Missing `reportId`/`sessionId` |
+| `INTERNAL_ERROR` | `DATABASE_URL` not configured |
 
 ---
 

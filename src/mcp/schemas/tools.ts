@@ -307,17 +307,30 @@ export const assertNetworkSchema = {
 export const sessionExportSchema = {
   type: 'object',
   properties: {
-    browserId: { type: 'string', format: 'uuid' },
+    browserId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Active browser session (live in-memory buffer). Mutually exclusive with reportId/sessionId.',
+    },
+    reportId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Persisted test report id (from dashboard or after browser_close). Rebuilds script from recorded_events.',
+    },
+    sessionId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Alias for reportId when exporting from the database after close.',
+    },
     name: {
       type: 'string',
-      description: 'Optional script name. Defaults to session-<browserId prefix>.',
+      description: 'Optional script name. Defaults to session-<browserId prefix> or the persisted test name.',
     },
     goal: {
       type: 'string',
       description: 'Optional natural-language goal stored in the exported script.',
     },
   },
-  required: ['browserId'],
   additionalProperties: false,
 } as const;
 

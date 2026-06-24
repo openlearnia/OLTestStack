@@ -58,9 +58,10 @@ Stop infrastructure:
 bun run docker:down
 ```
 
-Optional: run the app container (health on host **8091**, MCP on **8092**). Migrations run automatically before the app starts:
+Optional: run the app container (health on host **8091**, MCP on **8092**). Run migrations first, then start the full stack:
 
 ```bash
+docker compose run --rm migrate
 bun run docker:app
 curl http://localhost:8091/health
 open http://localhost:8091/dashboard
@@ -69,16 +70,16 @@ open http://localhost:8091/dashboard
 If the app container restarts in a loop with `column "saved" does not exist`, apply pending migrations to the existing Postgres volume:
 
 ```bash
-docker compose --profile migrate run --rm migrate
-docker compose --profile app up -d --build
+docker compose run --rm migrate
+docker compose up -d --build
 ```
 
 Override host ports in `.env` via `APP_HOST_PORT` and `MCP_HOST_PORT` if 8091/8092 are taken.
 
-Run migrations inside Docker (also runs automatically when starting the `app` service):
+Run migrations inside Docker:
 
 ```bash
-docker compose --profile migrate run --rm migrate
+docker compose run --rm migrate
 ```
 
 > **Production warning:** Default credentials in `.env.example` (`oltest`/`oltest`) are for local development only. Change `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL` before deploying.

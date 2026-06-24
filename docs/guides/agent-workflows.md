@@ -150,7 +150,7 @@ Inspect reports with `bun run db:studio` or query the database directly.
 
 ### `test_run` and `session_export`
 
-**`session_export`** converts the live recording buffer into a `.olteststack.json` replay script. Call it **before** `browser_close` while the session is still open.
+**`session_export`** converts a recording into a `.olteststack.json` replay script. Pass `browserId` while the session is open, or `reportId`/`sessionId` after `browser_close` to rebuild from PostgreSQL `recorded_events`.
 
 **`test_run`** executes explicit steps or a saved script and returns a structured `TestReport`:
 
@@ -170,12 +170,15 @@ browser_launch
   → page_create
   → page_navigate
   → (agent interactions: find, type, click, assert, wait, …)
-  → session_export          → save data.script to scripts/my-flow.olteststack.json
+  → session_export({ browserId, name, goal })   → save data.script (optional; can export after close)
   → browser_close
+  → session_export({ reportId, goal })          → optional post-close export from DB
 
 # Later, replay without re-specifying every step:
 test_run({ goal: "Replay", scriptFile: "scripts/my-flow.olteststack.json" })
 ```
+
+Failed runs: set `AUTO_SAVE_FAILED_SESSIONS=true` to auto-promote persisted sessions on close, or call `save_session({ reportId })` manually before TTL expiry.
 
 See the `session-record-export` skill in `.cursor/skills/` for a step-by-step guide.
 

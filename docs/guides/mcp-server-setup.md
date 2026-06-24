@@ -94,25 +94,28 @@ HTTP mode logs endpoints to stderr instead:
 
 ## Docker deployment (HTTP)
 
-Run Postgres + MCP server in containers. The `app` service waits for Postgres, runs `db:migrate` via the `migrate` one-shot service, then starts:
+Run Postgres + MCP server in containers.
+
+**Services:** `postgres` starts alone with `docker compose up -d postgres`. The full stack (`postgres` + one-shot `migrate` + `app`) starts with `docker compose up -d --build`. The `app` service waits for Postgres health and a successful `migrate` run. For first-time setup or after schema changes, run `migrate` explicitly before bringing up `app`.
 
 ```bash
 cp .env.example .env
-docker compose --profile app up -d --build
+docker compose up -d postgres
+docker compose run --rm migrate
+docker compose up -d --build
 ```
 
-Or start Postgres first, then the app:
+Or use the npm script after Postgres and migrations are ready:
 
 ```bash
-docker compose up -d postgres
-docker compose --profile app up -d --build
+bun run docker:app
 ```
 
 **Existing volume missing migrations** (app restart loop, `column "saved" does not exist`):
 
 ```bash
-docker compose --profile migrate run --rm migrate
-docker compose --profile app up -d --build
+docker compose run --rm migrate
+docker compose up -d --build
 ```
 
 Verify (Docker host ports **8091** / **8092** — avoids conflict with local `bun run dev:http` on 8081/8082):
@@ -133,7 +136,7 @@ The Docker `app` service sets `MCP_TRANSPORT=http`, binds `MCP_HTTP_HOST=0.0.0.0
 Stop:
 
 ```bash
-docker compose --profile app down
+docker compose down
 ```
 
 ## Cursor configuration
@@ -314,7 +317,9 @@ Copy `.env.example` to `.env` for local development. Variables can also be set i
 | `DEFAULT_NAVIGATION_TIMEOUT_MS` | `30000` | Navigation and reload timeout |
 | `SCREENSHOT_DIR` | `./screenshots` | Screenshot output directory (Phase 6+) |
 | `DATABASE_URL` | — | PostgreSQL connection string |
-| `PERSIST_RECORDING` | `false` | Flush recordings/reports to Postgres on `browser_close` |
+| `PERSIST_RECORDING` | `true` when `DATABASE_URL` set | Flush recordings/reports to Postgres on `browser_close` / `test_run` |
+| `SESSION_TTL_HOURS` | `24` | Hours until unsaved sessions are auto-deleted |
+| `AUTO_SAVE_FAILED` | `true` when `DATABASE_URL` set | Auto-promote failed/error sessions to saved (no TTL) on flush |
 | `DB_PORT` | `5433` | Documented Docker host port for Postgres |
 | `HEALTH_PORT` | — | App listen port for health (`8081`; container side in Docker) |
 | `APP_HOST_PORT` | `8091` | Docker host port mapped to `HEALTH_PORT` |
@@ -460,11 +465,29 @@ Override the target URL with `MCP_URL` or the fixture page with `TEST_NAV_URL`.
 **Fix:**
 
 ```bash
-docker compose --profile migrate run --rm migrate
-docker compose --profile app up -d --build
+docker compose run --rm migrate
+docker compose up -d --build
 ```
 
-New deployments auto-migrate before the app starts. If cleanup still hits an unmigrated DB (e.g. local `bun run dev` without `db:migrate`), the server logs a warning and continues instead of crashing.
+Run `migrate` before starting `app` on every fresh or upgraded deployment. If cleanup still hits an unmigrated DB (e.g. local `bun run dev` without `db:migrate`), the server logs a warning and continues instead of crashing.
+
+### Stale Docker image (local changes not reflected)
+
+**Symptoms:** The `app` container runs old code after you change the repo; a normal `up --build` still serves stale behavior.
+
+**Fix:** Rebuild without cache, then start. `--no-cache` is a `build` flag — it is **not** valid on `docker compose up`:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
+If migration scripts or the Dockerfile changed, rebuild without cache before re-running migrate:
+
+```bash
+docker compose build --no-cache migrate
+docker compose run --rm migrate
+```
 
 ### Port conflicts (`address already in use`)
 

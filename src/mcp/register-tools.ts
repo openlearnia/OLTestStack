@@ -247,7 +247,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'session_export',
     description:
-      'Export the current browser session recording as a replayable .olteststack.json script. Call before browser_close while the session is still open. Example: { "browserId": "...", "name": "Login flow", "goal": "Verify login works" }.',
+      'Export a browser session recording as a replayable .olteststack.json script. Pass browserId while the session is open, or reportId/sessionId after browser_close to rebuild from PostgreSQL recorded_events. Example: { "browserId": "...", "name": "Login flow" } or { "reportId": "550e8400-e29b-41d4-a716-446655440000" }.',
     inputSchema: sessionExportSchema as unknown as Record<string, unknown>,
     handler: (input) => exportSession(ctx, input),
   });

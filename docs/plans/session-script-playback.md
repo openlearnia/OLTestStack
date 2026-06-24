@@ -148,7 +148,7 @@ Or inline:
 | Phase | Scope |
 |-------|-------|
 | **V1.1 MVP** | `session_export`, `test_run` + `script`/`scriptFile`, `.olteststack.json` format, example script |
-| **V1.2 (done)** | Store `query` in action recording at emit time; variable substitution; auto-insert wait steps on export |
+| **V1.2 (done)** | Store `query` in action recording at emit time; variable substitution; auto-insert wait steps on export; post-close DB export via `reportId`; auto-save failed sessions |
 | **V2** | Full session replay with timing, multi-page, HAR/network assertions from buffer, script diff |
 
 ---
@@ -161,7 +161,9 @@ Or inline:
 3. session_export({ browserId, name: "Login flow", goal: "..." })
    → save response.script to scripts/my-flow.olteststack.json
 4. browser_close({ browserId })
-5. test_run({ goal: "Replay login", scriptFile: "scripts/my-flow.olteststack.json" })
+   → reportId in dashboard (or use session list API)
+5. session_export({ reportId, goal: "..." })  // optional: export after close
+6. test_run({ goal: "Replay login", scriptFile: "scripts/my-flow.olteststack.json" })
    → TestReport with pass/fail
 ```
 
@@ -174,7 +176,9 @@ Or inline:
 | `src/domain/recording/script-types.ts` | `SessionScript` type |
 | `src/domain/recording/events-to-script.ts` | Event → step converter |
 | `src/domain/recording/resolve-variables.ts` | `${VAR_NAME}` substitution for script replay |
-| `src/domain/recording/session-export.ts` | `session_export` handler |
+| `src/domain/recording/session-export.ts` | `session_export` handler (live + DB) |
+| `src/domain/recording/export-from-db.ts` | Post-close export from `recorded_events` |
+| `src/db/load-recorded-events.ts` | Load and map persisted events |
 | `src/domain/recording/load-script.ts` | Load/validate script files |
 | `src/domain/test/step-schema.ts` | Shared Zod step schema |
 | `src/domain/test/run-test.ts` | Extended with script playback |

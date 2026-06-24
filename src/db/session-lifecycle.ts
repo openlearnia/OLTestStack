@@ -21,3 +21,10 @@ export function hoursUntilExpiry(expiresAt: Date | null | undefined, now: Date =
   if (ms <= 0) return 0;
   return Math.ceil(ms / (60 * 60 * 1000));
 }
+
+export function shouldAutoSaveFailedSession(
+  config: Pick<ResolvedConfig, 'autoSaveFailedSessions'>,
+  status: 'passed' | 'failed' | 'error',
+): boolean {
+  return config.autoSaveFailedSessions && (status === 'failed' || status === 'error');
+}

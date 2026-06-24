@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { loadConfig } from '../../src/core/config/load-config.js';
+import { generateReport } from '../../src/domain/recording/generate-report.js';
+import type { RecordedEvent } from '../../src/core/types/sessions.js';
 import {
   computeSessionExpiresAt,
   hoursUntilExpiry,
+  shouldAutoSaveFailedSession,
   shouldPersistRecording,
 } from '../../src/db/session-lifecycle.js';
 
@@ -61,5 +64,70 @@ describe('session lifecycle', () => {
     else process.env.DATABASE_URL = prevDb;
     if (prevPersist === undefined) delete process.env.PERSIST_RECORDING;
     else process.env.PERSIST_RECORDING = prevPersist;
+  });
+
+  test('autoSaveFailedSessions reads AUTO_SAVE_FAILED env', () => {
+    const prev = process.env.AUTO_SAVE_FAILED;
+    const prevLegacy = process.env.AUTO_SAVE_FAILED_SESSIONS;
+    delete process.env.AUTO_SAVE_FAILED_SESSIONS;
+    process.env.AUTO_SAVE_FAILED = 'true';
+    expect(loadConfig().autoSaveFailedSessions).toBe(true);
+    process.env.AUTO_SAVE_FAILED = 'false';
+    expect(loadConfig().autoSaveFailedSessions).toBe(false);
+    if (prev === undefined) delete process.env.AUTO_SAVE_FAILED;
+    else process.env.AUTO_SAVE_FAILED = prev;
+    if (prevLegacy === undefined) delete process.env.AUTO_SAVE_FAILED_SESSIONS;
+    else process.env.AUTO_SAVE_FAILED_SESSIONS = prevLegacy;
+  });
+
+  test('autoSaveFailedSessions defaults true when DATABASE_URL is set', () => {
+    const prevDb = process.env.DATABASE_URL;
+    const prevAuto = process.env.AUTO_SAVE_FAILED;
+    const prevLegacy = process.env.AUTO_SAVE_FAILED_SESSIONS;
+    process.env.DATABASE_URL = 'postgresql://localhost/test';
+    delete process.env.AUTO_SAVE_FAILED;
+    delete process.env.AUTO_SAVE_FAILED_SESSIONS;
+
+    expect(loadConfig().autoSaveFailedSessions).toBe(true);
+
+    process.env.AUTO_SAVE_FAILED = 'false';
+    expect(loadConfig().autoSaveFailedSessions).toBe(false);
+
+    if (prevDb === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDb;
+    if (prevAuto === undefined) delete process.env.AUTO_SAVE_FAILED;
+    else process.env.AUTO_SAVE_FAILED = prevAuto;
+    if (prevLegacy === undefined) delete process.env.AUTO_SAVE_FAILED_SESSIONS;
+    else process.env.AUTO_SAVE_FAILED_SESSIONS = prevLegacy;
+  });
+
+  test('failed report status is eligible for auto-save when config enabled', () => {
+    const failedAssertion: RecordedEvent = {
+      timestamp: '2026-06-21T10:00:01.000Z',
+      type: 'assertion',
+      payload: {
+        passed: false,
+        assertion: 'text',
+        message: 'Expected welcome',
+        expected: 'Welcome',
+        actual: 'Error',
+      },
+    };
+
+    const report = generateReport([failedAssertion], 'failed-flow');
+    expect(report.status).toBe('failed');
+
+    const prevDb = process.env.DATABASE_URL;
+    const prevAuto = process.env.AUTO_SAVE_FAILED;
+    process.env.DATABASE_URL = 'postgresql://localhost/test';
+    delete process.env.AUTO_SAVE_FAILED;
+
+    const { autoSaveFailedSessions } = loadConfig();
+    expect(shouldAutoSaveFailedSession({ autoSaveFailedSessions }, report.status)).toBe(true);
+
+    if (prevDb === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDb;
+    if (prevAuto === undefined) delete process.env.AUTO_SAVE_FAILED;
+    else process.env.AUTO_SAVE_FAILED = prevAuto;
   });
 });

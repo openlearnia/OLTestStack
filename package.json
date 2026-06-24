@@ -16,7 +16,7 @@
     "test:mcp": "bun run scripts/test-mcp-tools.ts",
     "test:mcp:docker": "MCP_URL=http://localhost:8092/mcp bun run scripts/test-mcp-tools.ts",
     "docker:up": "docker compose up -d postgres",
-    "docker:app": "docker compose --profile app up -d --build",
+    "docker:app": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",

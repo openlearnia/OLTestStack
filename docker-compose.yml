@@ -5,19 +5,20 @@
 #   App health  host 8091 → container 8081  (APP_HOST_PORT / HEALTH_PORT)
 #   MCP HTTP    host 8092 → container 8082  (MCP_HOST_PORT / MCP_HTTP_PORT)
 #
-# Quick start (Postgres only):
+# Quick start (Postgres only — local dev with bun):
 #   docker compose up -d postgres
 #   cp .env.example .env
 #   bun run db:migrate
 #   bun run dev
 #
-# Full stack (MCP over HTTP in Docker — migrations run automatically before app):
-#   docker compose --profile app up -d --build
+# Full stack (MCP over HTTP in Docker — migrate runs once, then app starts):
+#   docker compose run --rm migrate   # first time or after schema changes
+#   docker compose up -d --build
 #   curl http://localhost:8091/health
 #
 # Existing volume missing migrations (app restart loop / column "saved" does not exist):
-#   docker compose --profile migrate run --rm migrate
-#   docker compose --profile app up -d --build
+#   docker compose run --rm migrate
+#   docker compose up -d --build
 #   open http://localhost:8091/dashboard
 #   curl -s -X POST http://localhost:8092/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}'
 
@@ -50,7 +51,7 @@ services:
       dockerfile: Dockerfile
     container_name: olteststack-app
     profiles:
-      - app
+      - migrate
     restart: unless-stopped
     depends_on:
       postgres:
@@ -78,8 +79,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: olteststack-migrate
-    profiles:
-      - migrate
+    restart: "no"
     depends_on:
       postgres:
         condition: service_healthy

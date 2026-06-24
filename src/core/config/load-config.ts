@@ -11,6 +11,8 @@ export interface FrameworkConfig {
   persistRecording?: boolean;
   /** Hours until unsaved sessions are auto-deleted (default 24). */
   sessionTtlHours?: number;
+  /** Promote failed/error sessions to saved on browser_close / test_run flush. */
+  autoSaveFailedSessions?: boolean;
   dbPort?: number;
   healthPort?: number;
   dashboardEnabled?: boolean;
@@ -32,6 +34,8 @@ export interface ResolvedConfig {
   persistRecording: boolean;
   /** TTL in hours for unsaved (ephemeral) persisted sessions. */
   sessionTtlHours: number;
+  /** When true, failed/error sessions are auto-promoted to saved (no TTL) on flush. Defaults to true when DATABASE_URL is set. */
+  autoSaveFailedSessions: boolean;
   /** Documented default host port for local Docker Postgres. */
   dbPort: number;
   /** Optional HTTP health port (8081) when running in Docker. */
@@ -60,6 +64,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   screenshotDir: './screenshots',
   persistRecording: false,
   sessionTtlHours: DEFAULT_SESSION_TTL_HOURS,
+  autoSaveFailedSessions: false,
   dbPort: DEFAULT_DB_PORT,
   dashboardEnabled: false,
   mcpTransport: 'stdio',
@@ -89,6 +94,9 @@ export function loadConfig(fileConfig: FrameworkConfig = {}): ResolvedConfig {
 
   const envPersistRecording = parseBoolean(process.env.PERSIST_RECORDING);
   const envSessionTtlHours = parseInteger(process.env.SESSION_TTL_HOURS);
+  const envAutoSaveFailed =
+    parseBoolean(process.env.AUTO_SAVE_FAILED) ??
+    parseBoolean(process.env.AUTO_SAVE_FAILED_SESSIONS);
   const envDbPort = parseInteger(process.env.DB_PORT);
   const envHealthPort = parseInteger(process.env.HEALTH_PORT);
   const envDashboardEnabled = parseBoolean(process.env.DASHBOARD_ENABLED);
@@ -119,6 +127,12 @@ export function loadConfig(fileConfig: FrameworkConfig = {}): ResolvedConfig {
       ((process.env.DATABASE_URL ?? fileConfig.databaseUrl) ? true : DEFAULT_CONFIG.persistRecording),
     sessionTtlHours:
       envSessionTtlHours ?? fileConfig.sessionTtlHours ?? DEFAULT_CONFIG.sessionTtlHours,
+    autoSaveFailedSessions:
+      envAutoSaveFailed ??
+      fileConfig.autoSaveFailedSessions ??
+      ((process.env.DATABASE_URL ?? fileConfig.databaseUrl)
+        ? true
+        : DEFAULT_CONFIG.autoSaveFailedSessions),
     dbPort: envDbPort ?? fileConfig.dbPort ?? DEFAULT_CONFIG.dbPort,
     healthPort: envHealthPort ?? fileConfig.healthPort,
     dashboardEnabled:

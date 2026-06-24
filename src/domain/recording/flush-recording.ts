@@ -1,6 +1,7 @@
 import type { AppContext } from '../../core/context.js';
 import { getDb, persistTestReport } from '../../db/index.js';
-import { shouldPersistRecording } from '../../db/session-lifecycle.js';
+import { promoteSessionToSaved } from '../../db/save-session-db.js';
+import { shouldPersistRecording, shouldAutoSaveFailedSession } from '../../db/session-lifecycle.js';
 import { generateReport } from './generate-report.js';
 
 export async function flushRecordingToDatabase(
@@ -21,7 +22,7 @@ export async function flushRecordingToDatabase(
     testName ?? `browser-session-${browserId.slice(0, 8)}`,
   );
 
-  return persistTestReport(
+  const reportId = await persistTestReport(
     db,
     {
       browserId,
@@ -40,4 +41,10 @@ export async function flushRecordingToDatabase(
     events,
     ctx.config,
   );
+
+  if (shouldAutoSaveFailedSession(ctx.config, report.status)) {
+    await promoteSessionToSaved(db, reportId);
+  }
+
+  return reportId;
 }
