@@ -29,6 +29,8 @@ Before changing anything, gather evidence via MCP:
 
 If session is lost (`SESSION_NOT_FOUND`), re-launch, navigate to the failing URL, then capture.
 
+For full session state (events, registry, pages), call `send_report` with `{ "browserId": "<browserId>", "note": "<what failed>" }` and cite the returned `debugId`.
+
 ### 2. Classify the failure
 
 | Symptom | Likely cause | Investigation |

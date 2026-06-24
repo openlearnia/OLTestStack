@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grid Toolbar Fixture</title>
+  <style>
+  #grid-toolbar { display: flex; gap: 8px; margin-bottom: 8px; }
+  #data-grid { border: 1px solid #ccc; width: 300px; }
+  .grid-row { display: flex; }
+  [role="columnheader"], [role="gridcell"] { flex: 1; padding: 4px 8px; border: 1px solid #eee; }
+  [role="gridcell"][data-selected="1"] { background: #def; }
+  </style>
+</head>
+<body>
+  <label>
+    Dataset
+    <select id="dataset" aria-label="Dataset">
+      <option value="products">Products</option>
+      <option value="orders">Orders</option>
+    </select>
+  </label>
+  <label>
+    Filter rows
+    <input type="text" id="filter" placeholder="Filter rows" aria-label="Filter rows" />
+  </label>
+
+  <div id="grid-toolbar" role="toolbar" aria-label="grid toolbar">
+    <input type="text" id="filter-name" aria-label="Name" placeholder="Name" data-floating-filter />
+    <input type="text" id="filter-salary" aria-label="Salary" placeholder="Salary" data-floating-filter />
+  </div>
+
+  <div id="data-grid" role="grid">
+    <div class="grid-row" role="row">
+      <div role="columnheader" tabindex="0">Name</div>
+      <div role="columnheader" tabindex="0">Salary</div>
+    </div>
+    <div class="grid-row" role="row">
+      <div role="gridcell" tabindex="0" id="cell-alice" data-row="0">Alice</div>
+      <div role="gridcell" tabindex="0" data-row="0">50000</div>
+    </div>
+    <div class="grid-row" role="row">
+      <div role="gridcell" tabindex="0" id="cell-bob" data-row="1">Bob</div>
+      <div role="gridcell" tabindex="0" data-row="1">60000</div>
+    </div>
+  </div>
+
+  <div id="viewport" role="region" aria-label="scrollable grid body" style="height: 200px; overflow: auto; width: 300px; border: 1px solid #ccc; margin-top: 8px;">
+    <div style="height: 800px; padding: 8px;">scrollable grid body</div>
+  </div>
+  <button type="button" id="toggle" onclick="document.body.dataset.dark = document.body.dataset.dark ? '' : '1'">
+    Toggle dark mode
+  </button>
+  <script>
+    document.getElementById('data-grid').addEventListener('click', (event) => {
+      const cell = event.target.closest('[role="gridcell"]');
+      if (!cell) return;
+      document.querySelectorAll('[role="gridcell"][data-selected]').forEach((el) => {
+        el.removeAttribute('data-selected');
+      });
+      cell.setAttribute('data-selected', '1');
+      cell.focus();
+    });
+    document.getElementById('data-grid').addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === ' ') {
+        document.body.dataset.lastGridKey = event.key;
+      }
+    });
+  </script>
+</body>
+</html>

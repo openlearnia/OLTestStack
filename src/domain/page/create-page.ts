@@ -23,14 +23,14 @@ async function checkBrowser(
   if (!browser) {
     return createError(
       'SESSION_NOT_FOUND',
-      `Browser session '${browserId}' not found. Call browser.launch to start a new browser.`,
+      `Browser session '${browserId}' not found. Call browser_launch to start a new browser.`,
       { browserId },
     );
   }
   if (browser.crashed || !ctx.cdp.isConnected({ id: browserId, connected: true })) {
     return createError(
       'BROWSER_CRASHED',
-      `Browser session '${browserId}' has crashed. Call browser.launch to start a new browser.`,
+      `Browser session '${browserId}' has crashed. Call browser_launch to start a new browser.`,
       { browserId },
     );
   }
@@ -88,7 +88,7 @@ export async function createPage(
 
     return success({ pageId: cdpPage.id, browserId });
   } catch (error) {
-    const mapped = mapCdpError(error, 'page.create');
+    const mapped = mapCdpError(error, 'page_create');
     return createError(mapped.code, mapped.message, { ...mapped.details, browserId });
   }
 }

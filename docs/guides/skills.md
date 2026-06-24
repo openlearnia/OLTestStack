@@ -133,11 +133,7 @@ disable-model-invocation: true
 6. **Synchronize** — `page_wait` after submit:
    - `{ "pageId": "<pageId>", "condition": "networkIdle" }` or URL condition for redirect
 
-7. **Verify** (when assertion tools are available in Phase 9):
-   - `assert.url` for expected post-login path
-   - `assert.text` for welcome message
-
-   **Today:** use `page_wait` with a URL condition, or `page_text` / `page_snapshot` to confirm expected content.
+7. **Verify** — use `assert_url` / `assert_text`, or `page_wait` with a URL condition, or `page_text` / `page_snapshot` to confirm expected content.
 
 8. **Evidence** — `page_screenshot` with `{ "pageId": "<pageId>" }`. Optionally `page_console` with `{ "level": "error" }`.
 
@@ -193,7 +189,7 @@ disable-model-invocation: true
 2. Fill form fields via `page_find` + `page_type`
 3. `page_find` "Save" → `page_click`
 4. `page_wait` for network idle or URL change
-5. `assert.text` with created item name (Phase 9+) — or `page_find` / `page_text` today
+5. `assert_text` with created item name — or `page_find` / `page_text`
 
 ### Read
 
@@ -205,13 +201,13 @@ disable-model-invocation: true
 
 1. `page_find` item name → click edit action via `page_click`
 2. `page_type` into changed fields
-3. Submit via `page_click` and verify with `page_text` or `assert.text` (Phase 9+)
+3. Submit via `page_click` and verify with `page_text` or `assert_text`
 
 ### Delete
 
 1. `page_find` item → click delete via `page_click`
 2. Confirm dialog via `page_find` "Confirm" + `page_click`
-3. Verify item absent via `page_find` (expect `ELEMENT_NOT_FOUND`) or `assert.text` (Phase 9+)
+3. Verify item absent via `page_find` (expect `ELEMENT_NOT_FOUND`) or `assert_text`
 
 ### Teardown
 
@@ -232,7 +228,7 @@ After create/update/delete, check:
 
 ## Current limitations
 
-Assertion tools (`assert.*`) and `test.run` orchestration are not yet implemented. Today, validate outcomes with:
+Use `assert_exists`, `assert_text`, `assert_url`, `assert_network`, and `test_run` for structured checks. For manual validation, use:
 - `page_wait` (URL or network idle conditions)
 - `page_text` / `page_snapshot` for content checks
 - `page_find` (expect `ELEMENT_NOT_FOUND` when item should be gone)
@@ -266,7 +262,7 @@ The agent loads the skill instructions, then calls OLTestStack MCP tools per the
 
 1. **Name tools exactly** — `page_navigate`, not "go to URL"
 2. **Show JSON shapes** — agents parse examples reliably
-3. **Document phase gaps** — note which steps use `assert.*` vs `page_text`/`page_wait` today
+3. **Document fallbacks** — note when steps use `assert_*` vs `page_text`/`page_wait`
 4. **Mandate cleanup** — `browser_close` in every skill
 5. **Link to guides** — point to `docs/guides/mcp-tools-reference.md` for schemas
 

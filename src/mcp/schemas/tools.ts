@@ -122,6 +122,11 @@ export const pagePressSchema = {
   properties: {
     pageId: { type: 'string', format: 'uuid' },
     key: { type: 'string', minLength: 1 },
+    elementId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Optional element to focus before pressing the key.',
+    },
   },
   required: ['pageId', 'key'],
   additionalProperties: false,
@@ -133,6 +138,11 @@ export const pageScrollSchema = {
     pageId: { type: 'string', format: 'uuid' },
     direction: { type: 'string', enum: ['up', 'down', 'left', 'right'] },
     amount: { type: 'integer', minimum: 1, default: 720 },
+    elementId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Optional scrollable element. Scrolls the element viewport instead of the window.',
+    },
   },
   required: ['pageId', 'direction'],
   additionalProperties: false,
@@ -287,6 +297,24 @@ export const sessionExportSchema = {
     goal: {
       type: 'string',
       description: 'Optional natural-language goal stored in the exported script.',
+    },
+  },
+  required: ['browserId'],
+  additionalProperties: false,
+} as const;
+
+export const sendReportSchema = {
+  type: 'object',
+  properties: {
+    browserId: { type: 'string', format: 'uuid' },
+    includeScreenshots: {
+      type: 'boolean',
+      default: false,
+      description: 'Capture fresh PNG screenshots for each open page and attach paths to the report.',
+    },
+    note: {
+      type: 'string',
+      description: 'Optional user context included in the debug report.',
     },
   },
   required: ['browserId'],

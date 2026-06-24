@@ -39,7 +39,7 @@ Use `page_elements` to map the list view (table rows, cards, action buttons).
 2. `page_find` + `page_type` for each form field
 3. `page_find` "Save" → `page_click`
 4. `page_wait` — `networkIdle` or URL change
-5. Verify: `page_find` with created item name (or `page_text` until `assert.text` lands in Phase 9)
+5. Verify: `page_find` with created item name (or `assert_text` / `page_text`)
 6. `page_network` with `filter: "/api/"` — confirm 2xx responses
 7. `page_screenshot` for evidence
 
@@ -92,7 +92,7 @@ Check `errorCount` in network/console responses.
 
 ## Current limitations
 
-`assert.*` and `test.run` are **not yet implemented**. Validate outcomes with:
+Validate outcomes with:
 
 - `page_wait` (URL or `networkIdle`)
 - `page_text` / `page_snapshot` for content checks

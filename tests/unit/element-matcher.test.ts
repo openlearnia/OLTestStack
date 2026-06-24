@@ -3,6 +3,8 @@ import type { Element } from '../../src/core/types/sessions.ts';
 import {
   filterVisible,
   matchesQuery,
+  rankFindMatches,
+  scoreFindMatch,
   toPublicElements,
 } from '../../src/domain/elements/element-matcher.ts';
 
@@ -36,5 +38,55 @@ describe('element-matcher', () => {
     const publicElements = toPublicElements([sample]);
     expect(publicElements[0]).not.toHaveProperty('selector');
     expect(publicElements[0]?.elementId).toBe('el-1');
+  });
+
+  test('scoreFindMatch prefers input over column header for same query', () => {
+    const filterInput: Element = {
+      elementId: 'filter',
+      role: 'textbox',
+      text: 'Name',
+      visible: true,
+      tag: 'input',
+      selector: 'dom:1:input',
+    };
+    const header: Element = {
+      elementId: 'header',
+      role: 'columnheader',
+      text: 'Name',
+      visible: true,
+      tag: 'div',
+      selector: 'dom:2:div',
+    };
+
+    const inputScore = scoreFindMatch(filterInput, 'Name', 'filter');
+    const headerScore = scoreFindMatch(header, 'Name', 'grid-header');
+    expect(inputScore).toBeGreaterThan(headerScore);
+  });
+
+  test('rankFindMatches orders input before column header', () => {
+    const filterInput: Element = {
+      elementId: 'filter',
+      role: 'textbox',
+      text: 'Name',
+      visible: true,
+      tag: 'input',
+      selector: 'dom:1:input',
+    };
+    const header: Element = {
+      elementId: 'header',
+      role: 'columnheader',
+      text: 'Name',
+      visible: true,
+      tag: 'div',
+      selector: 'dom:2:div',
+    };
+
+    const regionHints = new Map([
+      ['dom:1:input', 'filter'],
+      ['dom:2:div', 'grid-header'],
+    ]);
+    const ranked = rankFindMatches([header, filterInput], 'Name', regionHints);
+    expect(ranked[0]?.element.tag).toBe('input');
+    expect(ranked[0]?.reason).toMatch(/input|toolbar|filter/);
   });
 });

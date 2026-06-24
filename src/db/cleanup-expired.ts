@@ -7,6 +7,25 @@ import { testReports } from './schema.js';
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
+const SESSION_TTL_MIGRATION_WARNING =
+  '[olteststack] Session TTL columns missing — run bun run db:migrate';
+
+/** PostgreSQL undefined_column (42703) when session TTL migration was not applied. */
+export function isSessionTtlMigrationMissingError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const err = error as { code?: string; message?: string };
+  if (err.code === '42703') return true;
+
+  const message = err.message ?? '';
+  return (
+    message.includes('does not exist') &&
+    (message.includes('"saved"') ||
+      message.includes('"expires_at"') ||
+      message.includes('"saved_at"'))
+  );
+}
+
 function screenshotBasename(path: string): string | null {
   const normalized = path.replace(/\\/g, '/');
   if (normalized.includes('..')) return null;
@@ -88,13 +107,21 @@ export async function cleanupExpiredSessions(config: ResolvedConfig): Promise<Cl
 }
 
 export async function runCleanupOnce(config: ResolvedConfig): Promise<CleanupResult> {
-  const result = await cleanupExpiredSessions(config);
-  if (result.deletedReports > 0) {
-    console.error(
-      `[olteststack] Cleaned up ${result.deletedReports} expired session(s), ${result.deletedScreenshots} screenshot file(s)`,
-    );
+  try {
+    const result = await cleanupExpiredSessions(config);
+    if (result.deletedReports > 0) {
+      console.error(
+        `[olteststack] Cleaned up ${result.deletedReports} expired session(s), ${result.deletedScreenshots} screenshot file(s)`,
+      );
+    }
+    return result;
+  } catch (error) {
+    if (isSessionTtlMigrationMissingError(error)) {
+      console.error(SESSION_TTL_MIGRATION_WARNING);
+      return { deletedReports: 0, deletedScreenshots: 0 };
+    }
+    throw error;
   }
-  return result;
 }
 
 let cleanupTimer: ReturnType<typeof setInterval> | undefined;
@@ -130,6 +157,10 @@ async function main(): Promise<void> {
 
 if (import.meta.main) {
   main().catch((error) => {
+    if (isSessionTtlMigrationMissingError(error)) {
+      console.error(SESSION_TTL_MIGRATION_WARNING);
+      process.exit(1);
+    }
     console.error('[olteststack] Cleanup failed:', error);
     process.exit(1);
   });

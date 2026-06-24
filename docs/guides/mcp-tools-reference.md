@@ -28,9 +28,9 @@ Complete reference for OLTestStack MCP tools. All tools return a JSON envelope a
 
 | Status | Count | Tools |
 |--------|-------|-------|
-| **Implemented** | 25 | All V1 tools — browser, page, elements, actions, inspection, monitoring, wait, assertions, session_export, test_run |
+| **Implemented** | 27 | All V1 tools — browser, page, elements, actions, inspection, monitoring, wait, assertions, session_export, save_session, send_report, test_run |
 | **Planned** | 0 | — |
-| **Total (V1)** | 25 | Complete |
+| **Total (V1)** | 27 | Complete |
 
 ---
 
@@ -396,12 +396,23 @@ Find a single interactive element by text query. Matches visible text, role, or 
       "visible": true,
       "tag": "button"
     },
-    "matchCount": 1
+    "matchCount": 3,
+    "selectedReason": "toolbar/filter region",
+    "candidates": [
+      {
+        "element": { "elementId": "...", "role": "textbox", "text": "Name", "visible": true, "tag": "input" },
+        "reason": "toolbar/filter region"
+      },
+      {
+        "element": { "elementId": "...", "role": "columnheader", "text": "Name", "visible": true, "tag": "div" },
+        "reason": "column header (deprioritized vs filter inputs)"
+      }
+    ]
   }
 }
 ```
 
-When `matchCount > 1`, the first visible match is returned.
+When `matchCount > 1`, the best-ranked match is returned (not DOM order). Ranking prefers `input`/`textarea` over labels and column headers, and toolbar/floating-filter regions over grid headers. Check `selectedReason` and optional `candidates` (up to 5) when ambiguous — e.g. query `"Name"` on a data grid may match both a filter input and a column header.
 
 **Error cases**
 
@@ -412,7 +423,7 @@ When `matchCount > 1`, the first visible match is returned.
 | `ELEMENT_NOT_FOUND` | No visible element matches the query |
 | `INTERNAL_ERROR` | Tree extraction failed |
 
-**Agent workflow:** Use when you know the label (e.g. "Login", "Email", "Submit"). Faster than scanning a full `page_elements` list for simple flows.
+**Agent workflow:** Use when you know the label (e.g. "Login", "Email", "Submit"). Faster than scanning a full `page_elements` list for simple flows. On virtualized grids, prefer filter/toolbar queries (`"Name"`, `"Salary"`) and confirm `tag` is `input` before calling `page_type`.
 
 ---
 
@@ -514,21 +525,23 @@ Type text into an input or textarea element. Clears existing value unless `appen
 
 ### `page_press`
 
-Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos).
+Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos). When `elementId` is provided, the element is focused before the key is dispatched — required for grid keyboard navigation and to avoid keys landing on unrelated controls (e.g. a page-level `<select>`).
 
 **Input schema**
 
-| Field | Type | Required |
-|-------|------|----------|
-| `pageId` | string (UUID) | yes |
-| `key` | string (min 1 char) | yes |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pageId` | string (UUID) | yes | Target page |
+| `key` | string (min 1 char) | yes | Key name or combo (e.g. `"Enter"`, `"ArrowDown"`, `"Control+a"`) |
+| `elementId` | string (UUID) | no | Element to focus before pressing — pass the `elementId` from `page_find`/`page_click` |
 
 **Example input**
 
 ```json
 {
   "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "key": "Enter"
+  "key": "ArrowDown",
+  "elementId": "c3d4e5f6-a7b8-9012-cdef-123456789012"
 }
 ```
 
@@ -550,15 +563,16 @@ Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos).
 |------|------|
 | `INVALID_INPUT` | Unrecognized key name |
 | `SESSION_NOT_FOUND` | Page not found |
+| `ELEMENT_NOT_FOUND` | Unknown or stale `elementId` |
 | `INTERNAL_ERROR` | CDP key press failure |
 
-**Agent workflow:** Use after focusing an input to submit forms (`Enter`) or dismiss dialogs (`Escape`).
+**Agent workflow:** After `page_find` + `page_click` on a grid cell, pass the same `elementId` to `page_press` so arrow keys reach the grid — omitting `elementId` dispatches to whatever currently has focus (often wrong on complex pages). Use bare `page_press` only when the target is already focused.
 
 ---
 
 ### `page_scroll`
 
-Scroll the page in a direction. Default amount is one viewport height/width.
+Scroll the page in a direction. Default amount is one viewport height/width. With `elementId`, scrolls the nearest overflow container (`overflow: auto|scroll`) around that element — use for virtualized grid bodies instead of window scroll.
 
 **Input schema**
 
@@ -567,13 +581,16 @@ Scroll the page in a direction. Default amount is one viewport height/width.
 | `pageId` | string (UUID) | yes | — | Target page |
 | `direction` | enum | yes | — | `"up"` \| `"down"` \| `"left"` \| `"right"` |
 | `amount` | integer (≥1) | no | viewport size | Scroll distance in pixels |
+| `elementId` | string (UUID) | no | — | Anchor element; scrolls its nearest scrollable ancestor |
 
 **Example input**
 
 ```json
 {
   "pageId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "direction": "down"
+  "direction": "down",
+  "amount": 120,
+  "elementId": "c3d4e5f6-a7b8-9012-cdef-123456789012"
 }
 ```
 
@@ -596,9 +613,10 @@ Scroll the page in a direction. Default amount is one viewport height/width.
 |------|------|
 | `INVALID_INPUT` | Invalid direction or amount |
 | `SESSION_NOT_FOUND` | Page not found |
+| `ELEMENT_NOT_FOUND` | Unknown or stale `elementId` |
 | `INTERNAL_ERROR` | CDP scroll failure |
 
-**Agent workflow:** Scroll to reveal off-screen elements, then call `page_elements` or `page_find` again.
+**Agent workflow:** On virtualized grids, `page_find` a cell or viewport region, then `page_scroll` with that `elementId` to move the grid body — not the window. Re-run `page_elements` or `page_find` after scrolling to refresh virtualized rows.
 
 ---
 
@@ -1209,6 +1227,59 @@ Export the current browser session recording as a replayable `.olteststack.json`
 | `INVALID_INPUT` | Recording disabled for session |
 
 **Note:** Save `data.script` to a `.olteststack.json` file (e.g. under `scripts/`) for replay via `test_run`.
+
+---
+
+### `send_report`
+
+Dump full in-memory browser session state as a structured debug report. Generates a unique `debugId`, logs a summary line to stderr as `[olteststack:debug]`, and writes JSON to `SCREENSHOT_DIR/debug/{debugId}.json`.
+
+**Input schema**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `browserId` | string (UUID) | yes | — | Active browser session |
+| `includeScreenshots` | boolean | no | `false` | Capture fresh PNG per open page |
+| `note` | string | no | — | Optional user context stored in report |
+
+**Example input**
+
+```json
+{
+  "browserId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "note": "Submit button click did not navigate"
+}
+```
+
+**Example output**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "debugId": "dbg_550e8400-e29b-41d4-a716-446655440000",
+    "browserId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "recordedAt": "2026-06-23T10:00:00.000Z",
+    "reportFile": "./screenshots/debug/dbg_550e8400-e29b-41d4-a716-446655440000.json",
+    "report": {
+      "browserSession": { "browserId": "...", "recordingEnabled": true, "pageIds": [] },
+      "pages": [],
+      "events": [],
+      "eventCount": 0,
+      "registrySnapshot": { "pages": [] },
+      "note": "Submit button click did not navigate"
+    }
+  }
+}
+```
+
+**Error cases**
+
+| Code | When |
+|------|------|
+| `SESSION_NOT_FOUND` | Browser not found or already closed |
+| `INVALID_INPUT` | Malformed input |
+| `BROWSER_CRASHED` | `includeScreenshots: true` but browser disconnected |
 
 ---
 

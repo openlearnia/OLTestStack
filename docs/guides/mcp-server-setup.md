@@ -94,13 +94,25 @@ HTTP mode logs endpoints to stderr instead:
 
 ## Docker deployment (HTTP)
 
-Run Postgres + MCP server in containers:
+Run Postgres + MCP server in containers. The `app` service waits for Postgres, runs `db:migrate` via the `migrate` one-shot service, then starts:
 
 ```bash
 cp .env.example .env
+docker compose --profile app up -d --build
+```
+
+Or start Postgres first, then the app:
+
+```bash
 docker compose up -d postgres
+docker compose --profile app up -d --build
+```
+
+**Existing volume missing migrations** (app restart loop, `column "saved" does not exist`):
+
+```bash
 docker compose --profile migrate run --rm migrate
-bun run docker:app
+docker compose --profile app up -d --build
 ```
 
 Verify (Docker host ports **8091** / **8092** — avoids conflict with local `bun run dev:http` on 8081/8082):
@@ -438,6 +450,21 @@ Override the target URL with `MCP_URL` or the fixture page with `TEST_NAV_URL`.
    export CHROMIUM_EXECUTABLE_PATH=/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome
    ```
 3. On Linux CI/Docker, Chromium is preinstalled in the Docker image; ensure `CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser`.
+
+### App container restart loop (`column "saved" does not exist`)
+
+**Symptoms:** `olteststack-app` exits repeatedly; logs show `PostgresError: column "saved" does not exist` from session TTL cleanup.
+
+**Cause:** Postgres volume was created before migration `drizzle/0001_blue_greymalkin.sql` (adds `saved`, `expires_at`, `saved_at` on `test_reports`).
+
+**Fix:**
+
+```bash
+docker compose --profile migrate run --rm migrate
+docker compose --profile app up -d --build
+```
+
+New deployments auto-migrate before the app starts. If cleanup still hits an unmigrated DB (e.g. local `bun run dev` without `db:migrate`), the server logs a warning and continues instead of crashing.
 
 ### Port conflicts (`address already in use`)
 

@@ -42,7 +42,7 @@ export async function listElements(
   if (!page) {
     return createError(
       'SESSION_NOT_FOUND',
-      `Page session '${pageId}' not found. Call page.create to open a new page.`,
+      `Page session '${pageId}' not found. Call page_create to open a new page.`,
       { pageId },
     );
   }
@@ -75,7 +75,7 @@ export async function listElements(
       ...(truncated ? { truncated: true } : {}),
     });
   } catch (error) {
-    const mapped = mapCdpError(error, 'page.elements');
+    const mapped = mapCdpError(error, 'page_elements');
     return createError(mapped.code, mapped.message, { ...mapped.details, pageId });
   }
 }

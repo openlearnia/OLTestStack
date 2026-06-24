@@ -31,7 +31,7 @@ export async function closePage(
   if (!page) {
     return createError(
       'SESSION_NOT_FOUND',
-      `Page session '${pageId}' not found. It may have been closed. Call page.create to open a new page.`,
+      `Page session '${pageId}' not found. It may have been closed. Call page_create to open a new page.`,
       { pageId },
     );
   }

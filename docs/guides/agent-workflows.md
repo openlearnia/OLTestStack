@@ -1,6 +1,6 @@
 # Agent Workflows
 
-How AI agents should use the OLTestStack MCP server for reliable browser testing. These patterns apply to all **25 implemented tools**.
+How AI agents should use the OLTestStack MCP server for reliable browser testing. These patterns apply to all **27 implemented tools**.
 
 ## Recommended workflow pattern
 
@@ -24,6 +24,7 @@ launch → create page → navigate → discover elements → interact → wait 
 | Capture evidence | `page_screenshot`, `page_snapshot`, `page_text`, `page_html` | ✅ Implemented |
 | Observe | `page_network`, `page_console` | ✅ Implemented |
 | Export session | `session_export` | ✅ Implemented |
+| Debug dump | `send_report` | ✅ Implemented |
 | Run scripted test | `test_run` | ✅ Implemented |
 | Cleanup | `browser_close` | ✅ Implemented |
 

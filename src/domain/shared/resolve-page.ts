@@ -13,7 +13,7 @@ export async function resolvePageSession(
     return {
       error: createError(
         'SESSION_NOT_FOUND',
-        `Page session '${pageId}' not found. Call page.create to open a new page.`,
+        `Page session '${pageId}' not found. Call page_create to open a new page.`,
         { pageId },
       ),
     };
@@ -41,7 +41,7 @@ export async function resolveElement(
     return {
       error: createError(
         'ELEMENT_NOT_FOUND',
-        `Element '${elementId}' not found or stale. Call page.elements or page.find to refresh.`,
+        `Element '${elementId}' not found or stale. Call page_elements or page_find to refresh.`,
         { pageId, elementId },
       ),
     };

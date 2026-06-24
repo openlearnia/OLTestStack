@@ -18,9 +18,13 @@ import {
   type NetworkEntry,
   type ScrollDirection,
   type TypeOptions,
+  type ElementTargetOptions,
   type MonitoringHooks,
 } from './adapter.js';
 import { PageMonitoringBuffer } from './page-monitoring.js';
+
+const INTERACTIVE_SELECTOR =
+  'button, a[href], input, textarea, select, [role], [onclick], summary, [tabindex]:not([tabindex="-1"])';
 
 const INTERACTIVE_ROLES = new Set([
   'button',
@@ -74,6 +78,7 @@ function mapWaitUntil(waitUntil: NavigateOptions['waitUntil'] = 'load'): Puppete
 
 const ACTIONABLE_WAIT_MS = 5_000;
 const ACTIONABLE_POLL_MS = 100;
+const CLICK_DELAY_MS = 50;
 
 const NAMED_KEYS = new Set([
   'Enter',
@@ -330,6 +335,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
             visible: true,
             tagName,
             ariaLabel: name || undefined,
+            regionHint: role === 'columnheader' ? 'grid-header' : undefined,
           });
         }
 
@@ -350,8 +356,8 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }
   }
 
-  async clickElement(page: CdpPage, nodeId: string): Promise<void> {
-    const handle = await this.requireElementHandle(page, nodeId);
+  async clickElement(page: CdpPage, nodeId: string, options: ElementTargetOptions = {}): Promise<void> {
+    const handle = await this.requireElementHandle(page, nodeId, options.tag);
     try {
       await handle.evaluate((el) => {
         el.scrollIntoView({ block: 'center', inline: 'center' });
@@ -365,7 +371,8 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
           true,
         );
       }
-      await handle.click();
+      await this.focusElementHandle(handle);
+      await handle.click({ delay: CLICK_DELAY_MS });
     } catch (error) {
       if (error instanceof CdpError) throw error;
       throw new CdpError(
@@ -377,22 +384,26 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }
   }
 
-  async typeElement(page: CdpPage, nodeId: string, value: string, options: TypeOptions = {}): Promise<string> {
-    const handle = await this.requireElementHandle(page, nodeId);
+  async typeElement(
+    page: CdpPage,
+    nodeId: string,
+    value: string,
+    options: TypeOptions & ElementTargetOptions = {},
+  ): Promise<string> {
+    const handle = await this.requireElementHandle(page, nodeId, options.tag);
     const { append = false, delay = 0 } = options;
 
     try {
       await handle.evaluate((el) => {
         el.scrollIntoView({ block: 'center', inline: 'center' });
       });
-      await handle.click({ clickCount: 3 });
+      await this.focusElementHandle(handle);
+
+      const existingValue = append ? await readElementValue(handle) : '';
 
       if (!append) {
-        await handle.evaluate((el) => {
-          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-            el.value = '';
-          }
-        });
+        await handle.click({ clickCount: 3 });
+        await handle.press('Backspace');
       }
 
       if (delay > 0) {
@@ -401,12 +412,15 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
         await handle.type(value);
       }
 
-      return handle.evaluate((el) => {
-        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-          return el.value;
-        }
-        return (el as HTMLElement).innerText ?? '';
-      });
+      let finalValue = await readElementValue(handle);
+      const expectedValue = append ? `${existingValue}${value}` : value;
+
+      if (finalValue !== expectedValue) {
+        await setNativeInputValue(handle, expectedValue);
+        finalValue = await readElementValue(handle);
+      }
+
+      return finalValue;
     } catch (error) {
       throw new CdpError(
         'Failed to type into element',
@@ -417,13 +431,27 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }
   }
 
-  async pressKey(page: CdpPage, key: string): Promise<string> {
+  async pressKey(
+    page: CdpPage,
+    key: string,
+    options: ElementTargetOptions & { nodeId?: string } = {},
+  ): Promise<string> {
     if (!isValidKey(key)) {
       throw new CdpError(`Unrecognized key '${key}'`, 'Invalid key', 'pressKey', true);
     }
 
     const pageEntry = this.getPageEntry(page);
     try {
+      if (options.nodeId) {
+        const handle = await this.requireElementHandle(page, options.nodeId, options.tag);
+        await handle.evaluate((el) => {
+          el.scrollIntoView({ block: 'center', inline: 'center' });
+        });
+        await this.focusElementHandle(handle);
+        await handle.press(key as Parameters<ElementHandle['press']>[0]);
+        return key;
+      }
+
       await pageEntry.keyboard.press(key as Parameters<Page['keyboard']['press']>[0]);
       return key;
     } catch (error) {
@@ -436,7 +464,12 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     }
   }
 
-  async scroll(page: CdpPage, direction: ScrollDirection, amount?: number): Promise<{ direction: ScrollDirection; amount: number }> {
+  async scroll(
+    page: CdpPage,
+    direction: ScrollDirection,
+    amount?: number,
+    options: ElementTargetOptions & { nodeId?: string } = {},
+  ): Promise<{ direction: ScrollDirection; amount: number }> {
     const pageEntry = this.getPageEntry(page);
     const viewport = pageEntry.viewport();
     const defaultAmount =
@@ -452,9 +485,14 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
       right: { x: scrollAmount, y: 0 },
     }[direction];
 
-    await pageEntry.evaluate(({ x, y }) => {
-      window.scrollBy(x, y);
-    }, delta);
+    if (options.nodeId) {
+      const handle = await this.requireElementHandle(page, options.nodeId, options.tag);
+      await scrollNearestOverflow(handle, delta);
+    } else {
+      await pageEntry.evaluate(({ x, y }) => {
+        window.scrollBy(x, y);
+      }, delta);
+    }
 
     return { direction, amount: scrollAmount };
   }
@@ -546,29 +584,94 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     return this.monitoring.get(page.id)?.getLastActivityMs() ?? Date.now();
   }
 
-  async resolveElementHandle(page: CdpPage, nodeId: string): Promise<ElementHandle | null> {
+  async resolveElementHandle(page: CdpPage, nodeId: string, tag?: string): Promise<ElementHandle | null> {
+    const cacheKey = tag ? `${nodeId}::${tag}` : nodeId;
     let pageHandles = this.elementHandles.get(page.id);
     if (!pageHandles) {
       pageHandles = new Map();
       this.elementHandles.set(page.id, pageHandles);
     }
 
-    const cached = pageHandles.get(nodeId);
+    const cached = pageHandles.get(cacheKey);
     if (cached) return cached;
 
     const pageEntry = this.getPageEntry(page);
-    const selector = nodeIdToSelector(nodeId);
-    if (!selector) return null;
 
     try {
-      const handle = await pageEntry.$(selector);
+      const handle = await this.lookupElementHandle(pageEntry, nodeId, tag);
       if (handle) {
-        pageHandles.set(nodeId, handle);
+        pageHandles.set(cacheKey, handle);
       }
       return handle;
     } catch {
       return null;
     }
+  }
+
+  private async lookupElementHandle(page: Page, nodeId: string, tag?: string): Promise<ElementHandle | null> {
+    const domIndex = parseDomIndexFromNodeId(nodeId);
+    if (domIndex !== null) {
+      const handles = await page.$$(INTERACTIVE_SELECTOR);
+      const handle = handles[domIndex] ?? null;
+      if (!handle) return null;
+
+      if (tag) {
+        const tagName = await handle.evaluate((el) => el.tagName.toLowerCase());
+        if (tagName !== tag.toLowerCase()) return null;
+      }
+
+      return handle;
+    }
+
+    const roleName = parseRoleNameFromNodeId(nodeId);
+    if (!roleName) return null;
+
+    const handle = await page.evaluateHandle(
+      ({ selector, role, name, expectedTag }) => {
+        function inferInputRole(el: HTMLElement): string {
+          const type = (el as HTMLInputElement).type?.toLowerCase() ?? 'text';
+          if (type === 'checkbox') return 'checkbox';
+          if (type === 'radio') return 'radio';
+          if (type === 'submit' || type === 'button') return 'button';
+          return 'textbox';
+        }
+
+        const elements = Array.from(document.querySelectorAll(selector));
+        for (const el of elements) {
+          const htmlEl = el as HTMLElement;
+          const tagName = htmlEl.tagName.toLowerCase();
+          if (expectedTag && tagName !== expectedTag.toLowerCase()) continue;
+
+          const elRole =
+            htmlEl.getAttribute('role') ??
+            (tagName === 'a' ? 'link' : tagName === 'input' ? inferInputRole(htmlEl) : tagName);
+          const ariaLabel = htmlEl.getAttribute('aria-label') ?? undefined;
+          const text =
+            ariaLabel ??
+            htmlEl.innerText?.trim() ??
+            (htmlEl as HTMLInputElement).placeholder ??
+            htmlEl.getAttribute('value') ??
+            '';
+
+          if (elRole.toLowerCase() === role && text === name) {
+            return htmlEl;
+          }
+        }
+        return null;
+      },
+      {
+        selector: INTERACTIVE_SELECTOR,
+        role: roleName.role,
+        name: roleName.name,
+        expectedTag: tag,
+      },
+    );
+
+    const element = handle.asElement() as ElementHandle<Element> | null;
+    if (!element) {
+      await handle.dispose();
+    }
+    return element;
   }
 
   private async extractDomInteractiveElements(page: Page): Promise<CdpNode[]> {
@@ -579,14 +682,51 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
       visible: boolean;
       tagName: string;
       ariaLabel?: string;
+      regionHint?: string;
     };
 
-    return page.evaluate((): DomScanResult[] => {
+    return page.evaluate((selector: string): DomScanResult[] => {
       const results: DomScanResult[] = [];
 
-      const interactiveSelector =
-        'button, a[href], input, textarea, select, [role], [onclick], summary, [tabindex]:not([tabindex="-1"])';
-      const elements = document.querySelectorAll(interactiveSelector);
+      function inferRegion(el: HTMLElement): string | undefined {
+        let current: HTMLElement | null = el;
+        while (current && current !== document.body) {
+          const role = current.getAttribute('role')?.toLowerCase();
+          const ariaLabel = current.getAttribute('aria-label')?.toLowerCase() ?? '';
+          const id = current.id?.toLowerCase() ?? '';
+          const className = current.className?.toString().toLowerCase() ?? '';
+
+          if (
+            role === 'toolbar' ||
+            ariaLabel.includes('toolbar') ||
+            id.includes('toolbar') ||
+            className.includes('toolbar')
+          ) {
+            return 'toolbar';
+          }
+          if (
+            ariaLabel.includes('filter') ||
+            id.includes('filter') ||
+            className.includes('filter') ||
+            current.matches('[data-filter], [data-floating-filter]')
+          ) {
+            return 'filter';
+          }
+          if (role === 'columnheader') {
+            return 'grid-header';
+          }
+          if (role === 'gridcell' || role === 'row') {
+            return 'grid-body';
+          }
+          if (role === 'grid') {
+            return 'grid-body';
+          }
+          current = current.parentElement;
+        }
+        return undefined;
+      }
+
+      const elements = document.querySelectorAll(selector);
 
       elements.forEach((el: Element, index: number) => {
         const htmlEl = el as HTMLElement;
@@ -617,6 +757,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
           visible,
           tagName,
           ariaLabel,
+          regionHint: inferRegion(htmlEl),
         });
       });
 
@@ -629,7 +770,7 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
       }
 
       return results;
-    });
+    }, INTERACTIVE_SELECTOR);
   }
 
   private getPageEntry(page: CdpPage): Page {
@@ -645,8 +786,8 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
     return entry.page;
   }
 
-  private async requireElementHandle(page: CdpPage, nodeId: string): Promise<ElementHandle> {
-    const handle = await this.resolveElementHandle(page, nodeId);
+  private async requireElementHandle(page: CdpPage, nodeId: string, tag?: string): Promise<ElementHandle> {
+    const handle = await this.resolveElementHandle(page, nodeId, tag);
     if (!handle) {
       throw new CdpError(
         `Element handle for node '${nodeId}' not found`,
@@ -656,6 +797,14 @@ export class PuppeteerCdpAdapter implements CdpAdapter {
       );
     }
     return handle;
+  }
+
+  private async focusElementHandle(handle: ElementHandle): Promise<void> {
+    await handle.evaluate((el) => {
+      if (el instanceof HTMLElement) {
+        el.focus();
+      }
+    });
   }
 
   private async waitForActionable(handle: ElementHandle): Promise<boolean> {
@@ -719,19 +868,95 @@ function inferTagFromRole(role: string): string {
 }
 
 function mergeNodes(axNodes: CdpNode[], domNodes: CdpNode[], pageId: string): CdpNode[] {
-  const seen = new Set<string>();
-  const merged: CdpNode[] = [];
+  const byKey = new Map<string, CdpNode>();
 
   for (const node of [...axNodes, ...domNodes]) {
     const key = `${node.role}:${node.name}:${node.tagName}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({ ...node, nodeId: `${pageId}:${merged.length}:${node.nodeId}` });
+    const existing = byKey.get(key);
+    if (!existing || (!existing.regionHint && node.regionHint)) {
+      byKey.set(key, node);
+    }
   }
 
-  return merged;
+  return [...byKey.values()].map((node, index) => ({
+    ...node,
+    nodeId: `${pageId}:${index}:${node.nodeId}`,
+  }));
 }
 
-function nodeIdToSelector(_nodeId: string): string | null {
-  return 'button, a[href], input, textarea, select, [role], [onclick], summary, [tabindex]:not([tabindex="-1"])';
+export function parseDomIndexFromNodeId(nodeId: string): number | null {
+  const match = nodeId.match(/:dom:(\d+):/);
+  return match ? Number.parseInt(match[1]!, 10) : null;
+}
+
+export function parseDomTagFromNodeId(nodeId: string): string | null {
+  const match = nodeId.match(/:dom:\d+:([a-z0-9-]+)/i);
+  return match ? match[1]!.toLowerCase() : null;
+}
+
+export function parseRoleNameFromNodeId(nodeId: string): { role: string; name: string } | null {
+  if (nodeId.includes(':dom:')) return null;
+  const parts = nodeId.split(':');
+  if (parts.length < 2) return null;
+  const name = parts.at(-1) ?? '';
+  const role = parts.at(-2) ?? '';
+  if (!role) return null;
+  return { role: role.toLowerCase(), name };
+}
+
+async function scrollNearestOverflow(
+  handle: ElementHandle,
+  delta: { x: number; y: number },
+): Promise<void> {
+  await handle.evaluate((el, scrollDelta) => {
+    function isScrollable(node: Element): boolean {
+      const style = window.getComputedStyle(node);
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      const canScrollY =
+        (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+        node.scrollHeight > node.clientHeight;
+      const canScrollX =
+        (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') &&
+        node.scrollWidth > node.clientWidth;
+      return canScrollY || canScrollX;
+    }
+
+    function findScrollableAncestor(node: Element | null): Element {
+      let current: Element | null = node;
+      while (current && current !== document.documentElement) {
+        if (isScrollable(current)) return current;
+        current = current.parentElement;
+      }
+      return node ?? document.documentElement;
+    }
+
+    const target = findScrollableAncestor(el);
+    target.scrollBy(scrollDelta.x, scrollDelta.y);
+  }, delta);
+}
+
+async function readElementValue(handle: ElementHandle): Promise<string> {
+  return handle.evaluate((el) => {
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      return el.value;
+    }
+    if (el instanceof HTMLSelectElement) {
+      return el.value;
+    }
+    return (el as HTMLElement).innerText ?? '';
+  });
+}
+
+async function setNativeInputValue(handle: ElementHandle, value: string): Promise<void> {
+  await handle.evaluate((el, nextValue) => {
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      const prototype =
+        el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+      descriptor?.set?.call(el, nextValue);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, value);
 }

@@ -64,7 +64,11 @@ export async function typeIntoElement(
   const cdpPage = toCdpPage(pageResult.page);
 
   try {
-    const finalValue = await ctx.cdp.typeElement(cdpPage, element.selector!, value, { append, delay });
+    const finalValue = await ctx.cdp.typeElement(cdpPage, element.selector!, value, {
+      append,
+      delay,
+      tag: element.tag,
+    });
 
     emitActionRecording(ctx, pageResult.page.browserId, pageId, {
       action: 'type',

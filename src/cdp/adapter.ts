@@ -32,6 +32,8 @@ export interface CdpNode {
   tagName: string;
   ariaLabel?: string;
   bounds?: { x: number; y: number; width: number; height: number };
+  /** Heuristic region for find disambiguation (toolbar, filter, grid-header, grid-body) */
+  regionHint?: string;
 }
 
 export interface DOMStats {
@@ -52,6 +54,10 @@ export interface ScreenshotCapture {
 export interface TypeOptions {
   append?: boolean;
   delay?: number;
+}
+
+export interface ElementTargetOptions {
+  tag?: string;
 }
 
 export interface MonitoringHooks {
@@ -98,10 +104,20 @@ export interface CdpAdapter {
   getAccessibilityTree(page: CdpPage): Promise<CdpNode[]>;
   resolveElementHandle(page: CdpPage, nodeId: string): Promise<unknown | null>;
 
-  clickElement(page: CdpPage, nodeId: string): Promise<void>;
-  typeElement(page: CdpPage, nodeId: string, value: string, options?: TypeOptions): Promise<string>;
-  pressKey(page: CdpPage, key: string): Promise<string>;
-  scroll(page: CdpPage, direction: ScrollDirection, amount?: number): Promise<ScrollResult>;
+  clickElement(page: CdpPage, nodeId: string, options?: ElementTargetOptions): Promise<void>;
+  typeElement(
+    page: CdpPage,
+    nodeId: string,
+    value: string,
+    options?: TypeOptions & ElementTargetOptions,
+  ): Promise<string>;
+  pressKey(page: CdpPage, key: string, options?: ElementTargetOptions & { nodeId?: string }): Promise<string>;
+  scroll(
+    page: CdpPage,
+    direction: ScrollDirection,
+    amount?: number,
+    options?: ElementTargetOptions & { nodeId?: string },
+  ): Promise<ScrollResult>;
 
   captureScreenshot(page: CdpPage, fullPage?: boolean): Promise<ScreenshotCapture>;
   getDomStats(page: CdpPage): Promise<DOMStats>;

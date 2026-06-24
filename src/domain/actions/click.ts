@@ -45,7 +45,7 @@ export async function clickElement(
   const cdpPage = toCdpPage(pageResult.page);
 
   try {
-    await ctx.cdp.clickElement(cdpPage, element.selector!);
+    await ctx.cdp.clickElement(cdpPage, element.selector!, { tag: element.tag });
 
     emitActionRecording(ctx, pageResult.page.browserId, pageId, {
       action: 'click',

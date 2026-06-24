@@ -96,7 +96,7 @@ Or `{ "condition": "networkIdle" }` for SPA/API-driven redirects.
 
 ### 7. Verify
 
-`assert.*` tools are **not yet implemented**. Verify with:
+Use `assert_url`, `assert_text`, and `assert_exists`, or verify with:
 
 - `page_wait` (URL condition)
 - `page_text` or `page_snapshot` for welcome content

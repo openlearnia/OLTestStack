@@ -239,6 +239,7 @@ async function main(): Promise<number> {
   const steps: StepResult[] = [];
   let connection: McpConnection | null = null;
   let transportLabel = 'unknown';
+  let browserId: string | undefined;
 
   const record = (step: StepResult) => {
     steps.push(step);
@@ -269,7 +270,7 @@ async function main(): Promise<number> {
     const launch = parseToolPayload(
       await connection.client.callTool({ name: 'browser_launch', arguments: { headless: true } }),
     );
-    const browserId = launch.parsed?.ok ? String(launch.parsed.data?.browserId ?? '') : '';
+    browserId = launch.parsed?.ok ? String(launch.parsed.data?.browserId ?? '') : undefined;
     record({
       name: 'browser_launch',
       pass: Boolean(browserId),
@@ -321,6 +322,9 @@ async function main(): Promise<number> {
       pass: close.parsed?.ok === true,
       snippet: close.parsed?.ok ? 'closed' : snippet(close.parsed?.error ?? close.raw),
     });
+    if (close.parsed?.ok) {
+      browserId = undefined;
+    }
   } catch (error) {
     record({
       name: 'fatal',
@@ -328,6 +332,11 @@ async function main(): Promise<number> {
       error: error instanceof Error ? error.message : String(error),
     });
   } finally {
+    if (connection && browserId) {
+      await connection.client
+        .callTool({ name: 'browser_close', arguments: { browserId } })
+        .catch(() => undefined);
+    }
     if (connection) await connection.cleanup().catch(() => undefined);
   }
 

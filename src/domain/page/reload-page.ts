@@ -34,7 +34,7 @@ export async function reloadPage(
   if (!page) {
     return createError(
       'SESSION_NOT_FOUND',
-      `Page session '${pageId}' not found. Call page.create to open a new page.`,
+      `Page session '${pageId}' not found. Call page_create to open a new page.`,
       { pageId },
     );
   }

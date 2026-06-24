@@ -19,7 +19,7 @@ export function mapCdpError(error: unknown, operation: string): { code: ErrorCod
   if (message.includes('Target closed') || message.includes('Session closed')) {
     return {
       code: 'BROWSER_CRASHED',
-      message: `Browser disconnected during ${operation}. Call browser.launch to start a new session.`,
+      message: `Browser disconnected during ${operation}. Call browser_launch to start a new session.`,
       details: { operation },
     };
   }

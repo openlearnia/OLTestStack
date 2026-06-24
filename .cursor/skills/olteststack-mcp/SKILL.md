@@ -56,13 +56,13 @@ Always check `ok` before reading `data`.
 
 | ID | From | Required by |
 |----|------|-------------|
-| `browserId` | `browser_launch` | `page_create`, `browser_close`, `session_export` |
+| `browserId` | `browser_launch` | `page_create`, `browser_close`, `session_export`, `send_report` |
 | `pageId` | `page_create` | All `page_*` tools |
 | `elementId` | `page_find`, `page_elements`, `page_snapshot` | `page_click`, `page_type` |
 
 IDs invalidate on `page_navigate` and `page_reload`. Always re-discover elements after navigation.
 
-## Implemented tools (25)
+## Implemented tools (27)
 
 ### Browser (2)
 
@@ -127,11 +127,13 @@ IDs invalidate on `page_navigate` and `page_reload`. Always re-discover elements
 | `assert_url` | URL contains/equals expected |
 | `assert_network` | Request matching URL and status |
 
-### Session & test (2)
+### Session & test (4)
 
 | Tool | Purpose |
 |------|---------|
 | `session_export` | Export recording buffer as `.olteststack.json` script |
+| `save_session` | Promote ephemeral DB session to saved (no TTL) |
+| `send_report` | Dump full session debug state with `debugId` |
 | `test_run` | Execute steps/script and return `TestReport` |
 
 ## Canonical workflow
@@ -159,6 +161,10 @@ Always call `browser_close` in cleanup, even after failures.
 | `TIMEOUT` | Increase `timeoutMs` |
 | `BROWSER_CRASHED` | New `browser_launch` |
 | `NAVIGATION_FAILED` | Check URL and network |
+
+## Debugging
+
+Call `send_report` with `{ "browserId": "...", "note": "..." }` to capture full session state (events, pages, registry). Returns `debugId` and writes JSON under `SCREENSHOT_DIR/debug/`. Stderr logs `[olteststack:debug]` for grep.
 
 ## Project skills
 

@@ -22,6 +22,7 @@ import { assertNetwork } from '../domain/assertions/network.js';
 import { assertText } from '../domain/assertions/text.js';
 import { assertUrl } from '../domain/assertions/url.js';
 import { runTest } from '../domain/test/run-test.js';
+import { sendReport } from '../domain/debug/send-report.js';
 import { exportSession } from '../domain/recording/session-export.js';
 import { saveSession } from '../domain/recording/save-session.js';
 import { waitForCondition } from '../domain/waiting/wait.js';
@@ -52,6 +53,7 @@ import {
   pageWaitSchema,
   sessionExportSchema,
   saveSessionSchema,
+  sendReportSchema,
   testRunSchema,
 } from './schemas/tools.js';
 
@@ -141,7 +143,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'page_press',
     description:
-      'Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos). Example: { "pageId": "...", "key": "Enter" }.',
+      'Press a keyboard key on the page (Enter, Tab, Escape, arrows, modifier combos). Optionally pass elementId to focus an element first. Example: { "pageId": "...", "key": "Enter", "elementId": "..." }.',
     inputSchema: pagePressSchema as unknown as Record<string, unknown>,
     handler: (input) => pressKey(ctx, input),
   });
@@ -149,7 +151,7 @@ export function registerTools(ctx: AppContext): ToolRegistry {
   registry.register({
     name: 'page_scroll',
     description:
-      'Scroll the page in a direction (up, down, left, right). Default amount is one viewport height/width. Example: { "pageId": "...", "direction": "down" }.',
+      'Scroll the page or a specific element (pass elementId) in a direction (up, down, left, right). Default amount is one viewport height/width. Example: { "pageId": "...", "direction": "down", "elementId": "..." }.',
     inputSchema: pageScrollSchema as unknown as Record<string, unknown>,
     handler: (input) => scrollPage(ctx, input),
   });
@@ -256,6 +258,14 @@ export function registerTools(ctx: AppContext): ToolRegistry {
       'Promote an ephemeral persisted session to saved (no TTL). Unsaved sessions auto-delete after SESSION_TTL_HOURS unless saved. Example: { "reportId": "550e8400-e29b-41d4-a716-446655440000" } or { "sessionId": "...", "name": "Login regression" }.',
     inputSchema: saveSessionSchema as unknown as Record<string, unknown>,
     handler: (input) => saveSession(ctx, input),
+  });
+
+  registry.register({
+    name: 'send_report',
+    description:
+      'Dump full in-memory browser session state as a structured debug report with a unique debugId. Logs summary to stderr as [olteststack:debug] and writes JSON to SCREENSHOT_DIR/debug/. Example: { "browserId": "...", "note": "login failed after submit" }.',
+    inputSchema: sendReportSchema as unknown as Record<string, unknown>,
+    handler: (input) => sendReport(ctx, input),
   });
 
   registry.register({

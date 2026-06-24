@@ -70,7 +70,7 @@ export async function launchBrowser(
 
     return success({ browserId, createdAt });
   } catch (error) {
-    const mapped = mapCdpError(error, 'browser.launch');
+    const mapped = mapCdpError(error, 'browser_launch');
     return createError(mapped.code, mapped.message, mapped.details);
   }
 }
